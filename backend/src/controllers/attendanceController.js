@@ -1,5 +1,59 @@
 import { db } from "../prisma/db.js";
 
+const APP_TIME_ZONE = process.env.APP_TIME_ZONE || "Asia/Kolkata";
+
+const weekdayByName = {
+  Sun: 7,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+const getLocalScheduleContext = (date) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  return {
+    dayOfWeek: weekdayByName[values.weekday],
+    dateKey: `${values.year}-${values.month}-${values.day}`,
+    minutesSinceMidnight: Number(values.hour) * 60 + Number(values.minute),
+  };
+};
+
+const parseTimetableTime = (time) => {
+  const match = String(time).trim().match(/^(\d{1,2}):(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (hours > 23 || minutes > 59) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+};
+
 // ---------------------------------------------------------
 // GET ALL ATTENDANCE
 // ---------------------------------------------------------
@@ -77,30 +131,13 @@ export const createAttendanceSession = async (req, res) => {
     const timetables = await db.orm.public.Timetable.all();
 
     const now = new Date();
-
-    // JavaScript:
-    // Sunday = 0
-    // Monday = 1
-    // Tuesday = 2
-    // ...
-    // Saturday = 6
-
-    const todayDay = now.getDay() === 0 ? 7 : now.getDay();
-
-    console.log(
-      "🔥 TEST CLASS 24:",
-      timetables.filter((item) => item.classId === classId),
-    );
+    const localSchedule = getLocalScheduleContext(now);
 
     const todayTimetable = timetables.find(
-      (item) => item.classId === Number(classId) && item.dayOfWeek === todayDay,
+      (item) =>
+        item.classId === Number(classId) &&
+        item.dayOfWeek === localSchedule.dayOfWeek,
     );
-    console.log(
-      "🔥 STUDENT CLASS 24 TIMETABLES:",
-      timetables.filter((item) => item.classId === Number(classId)),
-    );
-
-    console.log("🔥 STUDENT MATCHED TIMETABLE:", todayTimetable);
 
     if (!todayTimetable) {
       return res.status(400).json({
@@ -109,45 +146,37 @@ export const createAttendanceSession = async (req, res) => {
       });
     }
 
-    // --------------------------------------------------
-    // 4. Convert timetable start/end into today's dates
-    // --------------------------------------------------
+    const scheduleStartMinutes = parseTimetableTime(todayTimetable.startTime);
+    const scheduleEndMinutes = parseTimetableTime(todayTimetable.endTime);
 
-    const [startHour, startMinute] = todayTimetable.startTime
-      .split(":")
-      .map(Number);
-
-    const [endHour, endMinute] = todayTimetable.endTime.split(":").map(Number);
-
-    const scheduleStart = new Date(now);
-
-    scheduleStart.setHours(startHour, startMinute, 0, 0);
-
-    const scheduleEnd = new Date(now);
-
-    scheduleEnd.setHours(endHour, endMinute, 0, 0);
+    if (scheduleStartMinutes === null || scheduleEndMinutes === null) {
+      return res.status(422).json({
+        success: false,
+        message: "This class has an invalid timetable time",
+      });
+    }
 
     // --------------------------------------------------
     // 5. Too early
     // --------------------------------------------------
 
-    if (now < scheduleStart) {
+    if (localSchedule.minutesSinceMidnight < scheduleStartMinutes) {
       return res.status(400).json({
         success: false,
         message: `Attendance can only be started at ${todayTimetable.startTime}`,
       });
     }
 
-    // // --------------------------------------------------
-    // // 6. Too late
-    // // --------------------------------------------------
+    // --------------------------------------------------
+    // 6. Too late
+    // --------------------------------------------------
 
-    // if (now >= scheduleEnd) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: `Attendance session for this class ended at ${todayTimetable.endTime}`,
-    //   });
-    // }
+    if (localSchedule.minutesSinceMidnight > scheduleEndMinutes) {
+      return res.status(400).json({
+        success: false,
+        message: `Attendance session for this class ended at ${todayTimetable.endTime}`,
+      });
+    }
 
     // --------------------------------------------------
     // 7. Check whether a session already exists
@@ -160,7 +189,8 @@ export const createAttendanceSession = async (req, res) => {
         session.classId === Number(classId) &&
         !session.endedAt &&
         session.startedAt &&
-        new Date(session.startedAt) >= scheduleStart,
+        getLocalScheduleContext(new Date(session.startedAt)).dateKey ===
+          localSchedule.dateKey,
     );
 
     if (activeSession) {
@@ -194,9 +224,9 @@ export const createAttendanceSession = async (req, res) => {
 
         timetableId: todayTimetable.id,
 
-        scheduledStart: scheduleStart,
+        scheduledStart: todayTimetable.startTime,
 
-        scheduledEnd: scheduleEnd,
+        scheduledEnd: todayTimetable.endTime,
       },
     });
   } catch (error) {
