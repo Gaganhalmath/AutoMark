@@ -18,7 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'http://192.168.212.213:5000/api';
+const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
 
 type Participant = {
   studentId: number;

@@ -174,7 +174,7 @@ export default function AttendanceReminderScreen() {
         setError(null);
 
         const response = await fetch(
-          'http://192.168.212.213:5000/api/student/timetable',
+          'https://automark-backend-wput.onrender.com/api/student/timetable',
           {
             method: 'GET',
             headers: {
@@ -277,7 +277,7 @@ export default function AttendanceReminderScreen() {
         }
 
         const sessionResponse = await fetch(
-          `http://192.168.212.213:5000/api/attendance/student/active-session/${classId}`,
+          `https://automark-backend-wput.onrender.com/api/attendance/student/active-session/${classId}`,
           {
             method: 'GET',
             headers: {

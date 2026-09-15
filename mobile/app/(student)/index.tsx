@@ -76,12 +76,12 @@ const loadDashboard = useCallback(
         getStudentDashboard(tokens.accessToken),
 
         fetch(
-          'http://192.168.212.213:5000/api/student/timetable',
+          'https://automark-backend-wput.onrender.com/api/student/timetable',
           { headers },
         ),
 
         fetch(
-          'http://192.168.212.213:5000/api/student/attendance',
+          'https://automark-backend-wput.onrender.com/api/student/attendance',
           { headers },
         ),
       ]);

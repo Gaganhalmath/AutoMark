@@ -34,7 +34,7 @@ import { Radius, Shadow, Spacing } from '../../constants/spacing';
 import { useAuth } from '../../auth/AuthProvider';
 
 const API_BASE_URL =
-  'http://192.168.212.213:5000/api';
+  'https://automark-backend-wput.onrender.com/api';
 
 const RADIUS = 54;
 const CIRCUMFERENCE =

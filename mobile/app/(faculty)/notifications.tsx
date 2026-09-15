@@ -35,7 +35,7 @@ interface NotifItem {
   unread: boolean;
 }
 
-const API_BASE_URL = 'http://192.168.212.213:5000/api';
+const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
 
 export default function FacultyNotificationsScreen() {
   const router = useRouter();

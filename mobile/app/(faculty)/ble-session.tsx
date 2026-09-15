@@ -25,7 +25,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { BLEService } from '../../services/ble';
 
 const API_BASE_URL =
-  'http://192.168.212.213:5000/api';
+  'https://automark-backend-wput.onrender.com/api';
 
 export default function BleSessionActiveScreen() {
   const router = useRouter();

@@ -103,7 +103,7 @@ const [selectedDay, setSelectedDay] = useState(getTodayKey());
         setError(null);
 
         const response = await fetch(
-          'http://192.168.212.213:5000/api/faculty/timetable',
+          'https://automark-backend-wput.onrender.com/api/faculty/timetable',
           {
             headers: {
               'Content-Type': 'application/json',
@@ -194,7 +194,7 @@ const [selectedDay, setSelectedDay] = useState(getTodayKey());
       setError(null);
 
       const response = await fetch(
-        'http://192.168.212.213:5000/api/faculty/timetable',
+        'https://automark-backend-wput.onrender.com/api/faculty/timetable',
         {
           headers: {
             'Content-Type': 'application/json',

@@ -16,7 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../auth/AuthProvider';
 import { Colors } from '../../constants/colors';
 
-const API_BASE_URL = 'http://192.168.212.213:5000/api';
+const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
 
 type FacultyTimetableItem = {
   id: number | string;

@@ -34,7 +34,7 @@ import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Radius, Shadow, Spacing } from '../../constants/spacing';
 
-const API_BASE_URL = 'http://192.168.212.213:5000/api';
+const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
 
 type FacultyTimetableItem = {
   id: number | string;

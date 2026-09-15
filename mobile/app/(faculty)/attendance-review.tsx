@@ -54,7 +54,7 @@ console.log('ATTENDANCE REVIEW TOKEN EXISTS:', !!tokens?.accessToken);
       setError('');
 
       const response = await fetch(
-        `http://192.168.212.213:5000/api/attendance/sessions/${sessionId}/participants`,
+        `https://automark-backend-wput.onrender.com/api/attendance/sessions/${sessionId}/participants`,
         {
           method: 'GET',
           headers: {
