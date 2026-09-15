@@ -32,6 +32,7 @@ class AndroidBleScanner(
 
     private var onSessionDetected:
             ((String, Int) -> Unit)? = null
+    private var onScanError: ((String, String) -> Unit)? = null
 
     /**
      * Start scanning for SmartAttend BLE.
@@ -43,7 +44,9 @@ class AndroidBleScanner(
      */
     @SuppressLint("MissingPermission")
     fun startScanning(
-        onSessionDetected: (String, Int) -> Unit
+        onSessionDetected: (String, Int) -> Unit,
+        onStart: (Boolean, String?, String?) -> Unit,
+        onError: (String, String) -> Unit
     ) {
 
         if (isScanning) {
@@ -53,16 +56,13 @@ class AndroidBleScanner(
                         "Already scanning"
             )
 
+            onStart(false, "BLE_ALREADY_SCANNING", "A BLE scan is already active.")
             return
         }
 
         if (!hasScanPermission()) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "BLUETOOTH_SCAN permission missing"
-            )
-
+            onStart(false, "BLUETOOTH_PERMISSION_DENIED", "BLUETOOTH_SCAN permission is missing.")
             return
         }
 
@@ -70,21 +70,13 @@ class AndroidBleScanner(
 
         if (adapter == null) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "Bluetooth unavailable"
-            )
-
+            onStart(false, "BLE_SCANNING_UNAVAILABLE", "Bluetooth adapter is unavailable.")
             return
         }
 
         if (!adapter.isEnabled) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "Bluetooth disabled"
-            )
-
+            onStart(false, "BLUETOOTH_DISABLED", "Bluetooth is disabled.")
             return
         }
 
@@ -92,16 +84,13 @@ class AndroidBleScanner(
 
         if (scanner == null) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "BLE scanner unavailable"
-            )
-
+            onStart(false, "BLE_SCANNING_UNAVAILABLE", "BLE scanning is not supported on this device.")
             return
         }
 
         this.onSessionDetected =
             onSessionDetected
+        this.onScanError = onError
 
         val scanSettings =
             ScanSettings.Builder()
@@ -115,11 +104,15 @@ class AndroidBleScanner(
                     "Starting scanner"
         )
 
-        scanner.startScan(
-            null,
-            scanSettings,
-            scanCallback
-        )
+        try {
+            scanner.startScan(null, scanSettings, scanCallback)
+        } catch (e: SecurityException) {
+            onStart(false, "BLUETOOTH_PERMISSION_DENIED", "Bluetooth scan permission is unavailable.")
+            return
+        } catch (e: Exception) {
+            onStart(false, "BLE_SCAN_FAILED", e.message ?: "Unable to start BLE scanning.")
+            return
+        }
 
         isScanning = true
 
@@ -127,6 +120,7 @@ class AndroidBleScanner(
             "SmartAttend BLE: " +
                     "Scanner STARTED"
         )
+        onStart(true, null, null)
     }
 
     /**
@@ -158,6 +152,7 @@ class AndroidBleScanner(
 
         isScanning = false
         onSessionDetected = null
+        onScanError = null
 
         println(
             "SmartAttend BLE: " +
@@ -199,6 +194,7 @@ class AndroidBleScanner(
                 )
 
                 isScanning = false
+                onScanError?.invoke("BLE_SCAN_FAILED", "BLE scan failed with error code $errorCode.")
             }
         }
 

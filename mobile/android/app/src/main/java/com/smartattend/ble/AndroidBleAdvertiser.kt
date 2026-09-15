@@ -63,12 +63,15 @@ class AndroidBleAdvertiser(
         get() = bluetoothAdapter?.bluetoothLeAdvertiser
 
     private var currentSessionId: String? = null
+    private var onResult: ((Boolean, String?, String?) -> Unit)? = null
 
     private val advertiseCallback =
         object : AdvertiseCallback() {
 
             
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+    onResult?.invoke(true, null, null)
+    onResult = null
     Log.d(TAG, "Advertising STARTED")
     Log.d(TAG, "ID = $currentSessionId")
 }
@@ -83,7 +86,10 @@ override fun onStartFailure(errorCode: Int) {
         else -> "UNKNOWN_ERROR"
     }
 
-    Log.e(TAG, "Advertising FAILED")
+    val message = "BLE advertising failed: $errorMessage (code $errorCode)"
+    onResult?.invoke(false, "BLE_ADVERTISE_FAILED", message)
+    onResult = null
+    Log.e(TAG, message)
     Log.e(TAG, "Error code = $errorCode")
     Log.e(TAG, "Error = $errorMessage")
 }
@@ -92,25 +98,21 @@ override fun onStartFailure(errorCode: Int) {
 
     @SuppressLint("MissingPermission")
     fun startAdvertising(
-        sessionId: String
+        sessionId: String,
+        result: (Boolean, String?, String?) -> Unit
     ) {
+        onResult = result
 
         if (!hasAdvertisePermission()) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "BLUETOOTH_ADVERTISE permission missing"
-            )
+            fail("BLUETOOTH_PERMISSION_DENIED", "BLUETOOTH_ADVERTISE permission is missing.")
 
             return
         }
 
         if (sessionId.isBlank()) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "ID is empty"
-            )
+            fail("BLE_INVALID_SESSION", "Attendance session ID is empty.")
 
             return
         }
@@ -119,20 +121,14 @@ override fun onStartFailure(errorCode: Int) {
 
         if (adapter == null) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "Bluetooth adapter unavailable"
-            )
+            fail("BLE_ADVERTISING_UNAVAILABLE", "Bluetooth adapter is unavailable.")
 
             return
         }
 
         if (!adapter.isEnabled) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "Bluetooth is disabled"
-            )
+            fail("BLUETOOTH_DISABLED", "Bluetooth is disabled.")
 
             return
         }
@@ -141,10 +137,7 @@ override fun onStartFailure(errorCode: Int) {
 
         if (bleAdvertiser == null) {
 
-            println(
-                "SmartAttend BLE: " +
-                        "BLE advertising not supported"
-            )
+            fail("BLE_ADVERTISING_UNAVAILABLE", "BLE advertising is not supported on this device.")
 
             return
         }
@@ -222,10 +215,7 @@ override fun onStartFailure(errorCode: Int) {
 
         } else {
 
-            println(
-                "SmartAttend BLE: " +
-                        "ID is too large for BLE packet"
-            )
+            fail("BLE_DATA_TOO_LARGE", "Attendance session ID is too large for BLE.")
 
             currentSessionId = null
             return
@@ -270,10 +260,17 @@ override fun onStartFailure(errorCode: Int) {
         )
     }
 
+    private fun fail(code: String, message: String) {
+        Log.e(TAG, "[BLE] $code: $message")
+        onResult?.invoke(false, code, message)
+        onResult = null
+    }
+
     @SuppressLint("MissingPermission")
     fun stopAdvertising() {
 
         if (!hasAdvertisePermission()) {
+            onResult = null
             return
         }
 

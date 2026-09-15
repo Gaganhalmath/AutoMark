@@ -38,13 +38,15 @@ class AndroidBleManager(
      * BCS701
      */
     fun startTeacherBroadcast(
-        sessionId: String
+        sessionId: String,
+        onResult: (Boolean, String?, String?) -> Unit
     ) {
 
         if (sessionId.isBlank()) {
             println(
                 "SmartAttend BLE: Session ID is empty"
             )
+            onResult(false, "BLE_INVALID_SESSION", "Attendance session ID is empty.")
             return
         }
 
@@ -58,9 +60,7 @@ class AndroidBleManager(
             "SmartAttend BLE: Session ID = $sessionId"
         )
 
-        advertiser.startAdvertising(
-            sessionId
-        )
+        advertiser.startAdvertising(sessionId, onResult)
     }
 
     /**
@@ -90,14 +90,16 @@ class AndroidBleManager(
      * - RSSI
      */
     fun startStudentScanning(
-        onSessionDetected: (String, Int) -> Unit
+        onSessionDetected: (String, Int) -> Unit,
+        onStart: (Boolean, String?, String?) -> Unit,
+        onError: (String, String) -> Unit
     ) {
 
         println(
             "SmartAttend BLE: Starting student scanning"
         )
 
-        scanner.startScanning { sessionId, rssi ->
+        scanner.startScanning({ sessionId, rssi ->
 
             println(
                 "SmartAttend BLE: " +
@@ -115,7 +117,7 @@ class AndroidBleManager(
                 sessionId,
                 rssi
             )
-        }
+        }, onStart, onError)
     }
 
     /**
@@ -138,7 +140,7 @@ fun startTeacherScanning(
         "SmartAttend BLE: Starting teacher scanning"
     )
 
-    scanner.startScanning { detectedId, rssi ->
+    scanner.startScanning({ detectedId, rssi ->
 
         println(
             "SmartAttend BLE: " +
@@ -154,7 +156,11 @@ fun startTeacherScanning(
             detectedId,
             rssi
         )
-    }
+    }, { success, code, message ->
+        println("SmartAttend BLE: Teacher scan ${if (success) "STARTED" else "FAILED: $code $message"}")
+    }, { code, message ->
+        println("SmartAttend BLE: Teacher scan FAILED: $code $message")
+    })
 }
 
 /**
@@ -212,7 +218,13 @@ fun stopTeacherScanning() {
 
         advertiser.startAdvertising(
             cryptographicId
-        )
+        ) { success, code, message ->
+            println(
+                "SmartAttend BLE: Student broadcast ${
+                    if (success) "STARTED" else "FAILED: $code ${message ?: "Unknown error"}"
+                }"
+            )
+        }
     }
 
     /**

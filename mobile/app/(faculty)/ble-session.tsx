@@ -25,7 +25,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { BLEService } from '../../services/ble';
 
 const API_BASE_URL =
-  'https://automark-backend-wput.onrender.com/api';
+  'https://automark-u7nr.onrender.com/api';
 
 export default function BleSessionActiveScreen() {
   const router = useRouter();
@@ -53,6 +53,8 @@ export default function BleSessionActiveScreen() {
 
   const [ending, setEnding] =
     useState(false);
+  const [bleActive, setBleActive] = useState(false);
+  const [bleError, setBleError] = useState<string | null>(null);
 
   /**
    * Prevents the timer and manual button
@@ -244,7 +246,8 @@ export default function BleSessionActiveScreen() {
           'SmartAttend BLE: Requesting Bluetooth permissions...',
         );
 
-        await BLEService.requestPermissions();
+        const permissionGranted = await BLEService.requestPermissions('advertise');
+        if (!permissionGranted) throw new Error('Bluetooth advertising permission was denied.');
 
         if (!mountedRef.current) {
           return;
@@ -259,18 +262,20 @@ export default function BleSessionActiveScreen() {
           sessionId,
         );
 
-        BLEService.startTeacherBroadcast(
-          sessionId,
-        );
-
-        console.log(
-          'SmartAttend BLE: Teacher broadcast started successfully',
-        );
+        const result = await BLEService.startTeacherBroadcast(sessionId);
+        if (!result.success) throw new Error(result.message || 'Unable to start BLE advertising.');
+        setBleActive(true);
+        setBleError(null);
+        console.log('SmartAttend BLE: Advertising STARTED');
       } catch (error) {
         console.error(
           'SmartAttend BLE START ERROR:',
           error,
         );
+        if (mountedRef.current) {
+          setBleActive(false);
+          setBleError(error instanceof Error ? error.message : 'Unable to start BLE advertising.');
+        }
       }
     };
 
@@ -359,7 +364,9 @@ export default function BleSessionActiveScreen() {
           >
             {ending
               ? 'Closing Attendance Session'
-              : 'Broadcasting BLE Signal'}
+              : bleActive
+              ? 'Broadcasting BLE Signal'
+              : 'Starting BLE Signal'}
           </Text>
 
           {sessionId && (
@@ -402,9 +409,13 @@ export default function BleSessionActiveScreen() {
             <Text style={styles.statusText}>
               {timeLeft === 0
                 ? 'The attendance window has expired. The session is being finalized and student check-ins are now locked.'
-                : 'Students can now detect this attendance session through BLE.'}
+                : bleActive
+                ? 'Students can now detect this attendance session through BLE.'
+                : 'BLE is not active. Resolve the Bluetooth error before asking students to check in.'}
             </Text>
           </View>
+
+          {bleError && <Text style={styles.bleError}>{bleError}</Text>}
         </View>
 
         {/* Live Roster */}
@@ -492,6 +503,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Colors.textSecondary,
+  },
+
+  bleError: {
+    marginTop: 12,
+    color: Colors.error,
+    fontSize: 13,
+    textAlign: 'center',
   },
 
   timerDisplay: {

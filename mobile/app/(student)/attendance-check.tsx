@@ -35,6 +35,11 @@ export default function AttendanceCheckScreen() {
   useEffect(() => {
     let mounted = true;
     let subscription: { remove: () => void } | null = null;
+    const errorSubscription = BLEService.addErrorListener((bleError) => {
+      if (!mounted) return;
+      setError(bleError.message);
+      setCurrentStep('Bluetooth scanning failed.');
+    });
 
     const startVerification = async () => {
       try {
@@ -48,7 +53,7 @@ export default function AttendanceCheckScreen() {
         setCurrentStep('Requesting Bluetooth permission...');
 
         const permissionGranted =
-          await BLEService.requestPermissions();
+          await BLEService.requestPermissions('scan');
 
         if (!mounted) return;
 
@@ -75,7 +80,7 @@ export default function AttendanceCheckScreen() {
           'SmartAttend BLE: Starting student scanning'
         );
 
-        subscription = BLEService.startStudentScanning(
+        const scan = await BLEService.startStudentScanning(
           (data) => {
             if (!mounted) return;
 
@@ -140,8 +145,14 @@ export default function AttendanceCheckScreen() {
           }
         );
 
+        if (!scan.result.success) {
+          scan.subscription.remove();
+          throw new Error(scan.result.message || 'Unable to start BLE scanning.');
+        }
+        subscription = scan.subscription;
+
         console.log(
-          'SmartAttend BLE: Student scanning started'
+          'SmartAttend BLE: Scan STARTED'
         );
 
       } catch (err) {
@@ -178,6 +189,7 @@ export default function AttendanceCheckScreen() {
       if (subscription) {
         subscription.remove();
       }
+      errorSubscription.remove();
     };
   }, []);
 
