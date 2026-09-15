@@ -258,7 +258,7 @@ const DAYS: DayItem[] = useMemo(() => {
       setError(null);
 
       const response = await fetch(
-        'https://automark-backend-wput.onrender.com/api/student/timetable',
+        'https://automark-u7nr.onrender.com/api/student/timetable',
         {
           headers: {
             'Content-Type': 'application/json',
@@ -394,7 +394,7 @@ useFocusEffect(
     setCheckingSession(String(cls.classId));
 
     const response = await fetch(
-      `https://automark-backend-wput.onrender.com/api/attendance/student/active-session/${cls.classId}`,
+      `https://automark-u7nr.onrender.com/api/attendance/student/active-session/${cls.classId}`,
       {
         headers: {
           'Content-Type': 'application/json',
@@ -501,7 +501,7 @@ console.log(
 
           if (tokens?.accessToken) {
             fetch(
-              'https://automark-backend-wput.onrender.com/api/student/timetable',
+              'https://automark-u7nr.onrender.com/api/student/timetable',
               {
                 headers: {
                   'Content-Type': 'application/json',

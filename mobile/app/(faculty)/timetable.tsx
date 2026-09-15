@@ -103,7 +103,7 @@ const [selectedDay, setSelectedDay] = useState(getTodayKey());
         setError(null);
 
         const response = await fetch(
-          'https://automark-backend-wput.onrender.com/api/faculty/timetable',
+          'https://automark-u7nr.onrender.com/api/faculty/timetable',
           {
             headers: {
               'Content-Type': 'application/json',
@@ -194,7 +194,7 @@ const [selectedDay, setSelectedDay] = useState(getTodayKey());
       setError(null);
 
       const response = await fetch(
-        'https://automark-backend-wput.onrender.com/api/faculty/timetable',
+        'https://automark-u7nr.onrender.com/api/faculty/timetable',
         {
           headers: {
             'Content-Type': 'application/json',

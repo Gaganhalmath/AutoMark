@@ -21,7 +21,7 @@ import {
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
+const API_BASE_URL = 'https://automark-u7nr.onrender.com/api';
 
 type FacultyTimetableItem = {
   id: number | string;

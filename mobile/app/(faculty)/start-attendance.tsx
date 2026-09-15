@@ -16,7 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../auth/AuthProvider';
 import { Colors } from '../../constants/colors';
 
-const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
+const API_BASE_URL = 'https://automark-u7nr.onrender.com/api';
 
 type FacultyTimetableItem = {
   id: number | string;
@@ -363,19 +363,18 @@ export default function StartAttendanceScreen() {
           >
             <View style={styles.toggleTextCol}>
               <Text style={styles.toggleTitle}>
-                BLE Beacon Broadcasting
+                Require BLE Beacon Verification
               </Text>
 
               <Text style={styles.toggleDesc}>
-                Broadcast Bluetooth low-energy
-                packet from faculty device
+                Require students to be near the faculty BLE beacon
               </Text>
             </View>
 
             <Text style={styles.toggleIcon}>
               {requireBLE
-                ? '🟢 ON'
-                : '⚪ OFF'}
+                ? '🟢 REQUIRED'
+                : '⚪ OPTIONAL'}
             </Text>
           </Pressable>
 

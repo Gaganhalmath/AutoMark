@@ -54,7 +54,7 @@ console.log('ATTENDANCE REVIEW TOKEN EXISTS:', !!tokens?.accessToken);
       setError('');
 
       const response = await fetch(
-        `https://automark-backend-wput.onrender.com/api/attendance/sessions/${sessionId}/participants`,
+        `https://automark-u7nr.onrender.com/api/attendance/sessions/${sessionId}/participants`,
         {
           method: 'GET',
           headers: {

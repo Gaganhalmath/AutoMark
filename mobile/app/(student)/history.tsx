@@ -24,7 +24,7 @@ import { Typography } from '../../constants/typography';
 import { Radius, Shadow, Spacing } from '../../constants/spacing';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
+const API_BASE_URL = 'https://automark-u7nr.onrender.com/api';
 
 type AttendanceRecord = {
   attendanceId: number;
@@ -524,7 +524,7 @@ setRefreshing(false);
 
             <Pressable
               style={styles.resetBtn}
-              onPress={fetchHistory}
+              onPress={() => fetchHistory()}
             >
               <Text style={styles.resetBtnText}>
                 Try Again

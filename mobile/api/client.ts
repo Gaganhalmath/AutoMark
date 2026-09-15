@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://automark-backend-wput.onrender.com';
+const API_BASE_URL = 'https://automark-u7nr.onrender.com';
 
 export interface BackendLoginResponse {
   success: boolean;

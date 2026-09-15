@@ -31,7 +31,7 @@ import { Typography } from '../../constants/typography';
 import { Radius, Shadow, Spacing } from '../../constants/spacing';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'https://automark-backend-wput.onrender.com/api';
+const API_BASE_URL = 'https://automark-u7nr.onrender.com/api';
 
 const RADIUS = 66;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
