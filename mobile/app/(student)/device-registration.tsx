@@ -26,6 +26,11 @@ import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Radius, Shadow, Spacing } from '../../constants/spacing';
 
+import * as Crypto from 'expo-crypto';
+import * as SecureStore from 'expo-secure-store';
+
+import { apiRequest } from '../../services/api';
+
 const REGISTRATION_STEPS = [
   { text: 'Communicating with server...', ms: '42ms' },
   { text: 'Verifying hardware signature...', ms: '38ms' },
@@ -35,8 +40,26 @@ const REGISTRATION_STEPS = [
 ];
 
 export default function DeviceRegistrationScreen() {
+  console.log("🔥🔥🔥 DEVICE REGISTRATION SCREEN LOADED 🔥🔥🔥");
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, tokens } = useAuth();
+
+  const generateDeviceKey = async () => {
+  const existingKey = await SecureStore.getItemAsync('smartattend_device_key');
+
+  if (existingKey) {
+    return existingKey;
+  }
+
+  const randomBytes = await Crypto.getRandomBytesAsync(32);
+  const publicKey = Array.from(randomBytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+
+  await SecureStore.setItemAsync('smartattend_device_key', publicKey);
+
+  return publicKey;
+};
 
   const [stepIndex, setStepIndex] = useState(0);
   const [complete, setComplete] = useState(false);
@@ -69,24 +92,60 @@ export default function DeviceRegistrationScreen() {
     return () => ping.stop();
   }, [pingAnim]);
 
-  // Step through registration stages
-  useEffect(() => {
-    let step = 0;
-    const interval = setInterval(() => {
-      step++;
-      if (step < REGISTRATION_STEPS.length) {
-        setStepIndex(step);
-      } else {
-        clearInterval(interval);
-        setComplete(true);
-        // Navigate to success after a short pause
-        setTimeout(() => {
-          router.replace('/(student)/registration-success');
-        }, 1000);
+  // Real device registration
+useEffect(() => {
+  let mounted = true;
+
+  const registerDevice = async () => {
+    try {
+      if (!tokens?.accessToken) {
+        throw new Error('Authentication session not found');
       }
-    }, 2200);
-    return () => clearInterval(interval);
-  }, [router]);
+
+      // Step 1 — Generate or retrieve the device key
+      if (mounted) setStepIndex(0);
+      const publicKey = await generateDeviceKey();
+
+console.log("🔥 GENERATED DEVICE KEY:", publicKey);
+      // Step 2 — Send the key to the backend
+      if (mounted) setStepIndex(1);
+
+      console.log("DEVICE TOKEN:", tokens.accessToken);
+
+      await apiRequest('/student/device', {
+        method: 'POST',
+        body: { publicKey },
+        token: tokens.accessToken,
+      });
+
+      // Step 3 — Registration succeeded
+      if (mounted) {
+        setStepIndex(REGISTRATION_STEPS.length - 1);
+        setComplete(true);
+      }
+
+      // Navigate after a short pause
+      setTimeout(() => {
+        if (mounted) {
+          router.replace('/(student)/registration-success');
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('DEVICE REGISTRATION ERROR:', error);
+
+      if (mounted) {
+        setComplete(false);
+        setStepIndex(0);
+      }
+    }
+  };
+
+  registerDevice();
+
+  return () => {
+    mounted = false;
+  };
+}, [router, tokens?.accessToken]);
 
   const spinDeg = spinAnim.interpolate({
     inputRange: [0, 1],

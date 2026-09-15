@@ -69,3 +69,29 @@ backend/.txt
 mobile/android/local.properties
 mobile/android/hs_err_pid*.log
 mobile/android/replay_pid*.log
+
+# ================================
+# Local debugging / test artifacts
+# ================================
+backend/checkUser4.js
+backend/repairAttendance.js
+backend/curl
+backend/dir
+backend/node
+backend/src/controllers.zip
+backend/src/routes.zip
+backend/src/prisma/contract.before-admin.json
+backend/src/prisma/contract.before-admin.prisma
+backend/src/prisma/contract.pre-merge.prisma
+backend/src/routes/adminUserRoutes.js
+backend/src/controllers/adminUserController.js
+
+# Mobile debugging / test artifacts
+mobile/TransformOperationInterpolator.cpp.backup
+mobile/TransformOperationInterpolator.h.backup
+mobile/android/build-error.txt
+mobile/android/cpp-error.txt
+mobile/app/(student)/device-registration.backup
+mobile/faculty-test.apk
+mobile/powershell
+mobile/{

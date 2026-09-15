@@ -24,7 +24,34 @@ import {
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'http://192.168.6.213:5000/api';
+const API_BASE_URL = 'http://192.168.212.213:5000/api';
+const formatTime = (value: string) => {
+  if (!value) return '';
+
+  // Handle ISO date returned by the backend
+  const date = new Date(value);
+
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  // Handle HH:mm values
+  const [hourString, minute = '00'] = value.split(':');
+
+  let hour = Number(hourString);
+
+  if (Number.isNaN(hour)) {
+    return value;
+  }
+
+  const suffix = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12 || 12;
+
+  return `${hour}:${minute} ${suffix}`;
+};
 
 export default function AllChecksPassedScreen() {
   const router = useRouter();
@@ -33,7 +60,25 @@ export default function AllChecksPassedScreen() {
   const { tokens } = useAuth();
 
   const sessionId = params.sessionId as string | undefined;
-  const rssi = params.rssi as string | undefined;
+const rssi = params.rssi as string | undefined;
+
+const subjectName =
+  (params.subjectName as string) || 'Subject';
+
+const subjectCode =
+  (params.subjectCode as string) || '';
+
+const room =
+  (params.room as string) || 'Room not assigned';
+
+const faculty =
+  (params.faculty as string) || 'Faculty';
+
+const scheduledStart =
+  (params.scheduledStart as string) || '';
+
+const scheduledEnd =
+  (params.scheduledEnd as string) || '';
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -164,8 +209,9 @@ export default function AllChecksPassedScreen() {
             </Text>
 
             <Text style={styles.detailValue}>
-              Data Structures & Algorithms
-            </Text>
+  {subjectName}
+  {subjectCode ? ` (${subjectCode})` : ''}
+</Text>
           </View>
 
           <View style={styles.divider} />
@@ -176,8 +222,8 @@ export default function AllChecksPassedScreen() {
             </Text>
 
             <Text style={styles.detailValue}>
-              LHC-101
-            </Text>
+  {room}
+</Text>
           </View>
 
           <View style={styles.divider} />
@@ -188,8 +234,8 @@ export default function AllChecksPassedScreen() {
             </Text>
 
             <Text style={styles.detailValue}>
-              Dr. Ramesh Kumar
-            </Text>
+  {faculty}
+</Text>
           </View>
 
           <View style={styles.divider} />
@@ -200,8 +246,10 @@ export default function AllChecksPassedScreen() {
             </Text>
 
             <Text style={styles.detailValue}>
-              09:00 AM - 10:00 AM
-            </Text>
+  {scheduledStart && scheduledEnd
+    ? `${formatTime(scheduledStart)} - ${formatTime(scheduledEnd)}`
+    : 'Time not available'}
+</Text>
           </View>
         </View>
 

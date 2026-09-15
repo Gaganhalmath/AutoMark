@@ -111,12 +111,31 @@ export default function AttendanceCheckScreen() {
               if (!mounted) return;
 
               router.replace({
-                pathname: '/(student)/location-check',
-                params: {
-                  sessionId: data.id,
-                  rssi: String(data.rssi),
-                },
-              });
+  pathname: '/(student)/location-check',
+  params: {
+    sessionId: data.id,
+    rssi: String(data.rssi),
+
+    // Carry real class/session details forward
+    subjectName:
+      (params.subjectName as string) || '',
+
+    subjectCode:
+      (params.subjectCode as string) || '',
+
+    room:
+      (params.room as string) || '',
+
+    faculty:
+      (params.faculty as string) || '',
+
+    scheduledStart:
+      (params.scheduledStart as string) || '',
+
+    scheduledEnd:
+      (params.scheduledEnd as string) || '',
+  },
+});
             }, 800);
           }
         );
@@ -200,7 +219,7 @@ export default function AttendanceCheckScreen() {
             ? error
             : bleDetected
             ? `Attendance session ${sessionId} detected successfully.`
-            : 'Please stand near your classroom while SmartAttend verifies the attendance beacon.'}
+            : 'Please stand near your classroom while AutoMark verifies the attendance beacon.'}
         </Text>
 
         <View style={styles.progressCard}>

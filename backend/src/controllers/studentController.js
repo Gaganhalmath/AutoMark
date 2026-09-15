@@ -222,6 +222,12 @@ export const getStudentProfile = async (req, res) => {
       (item) => item.id === student.departmentId,
     );
 
+    const devices = await db.orm.public.StudentDevice.where({
+      studentId: student.id,
+    }).all();
+
+    const deviceRegistered = devices.some((device) => device.isActive === true);
+
     res.status(200).json({
       success: true,
       data: {
@@ -234,6 +240,7 @@ export const getStudentProfile = async (req, res) => {
         semester: student.semester,
         section: student.section,
         academicYear: student.academicYear,
+        deviceRegistered,
       },
     });
   } catch (error) {
@@ -305,7 +312,6 @@ export const getStudentSubjects = async (req, res) => {
     });
   }
 };
-
 export const getStudentSubjectDetails = async (req, res) => {
   try {
     const studentId = await getStudentIdFromUser(req.user.id);
@@ -333,29 +339,50 @@ export const getStudentSubjectDetails = async (req, res) => {
     const sessions = await db.orm.public.AttendanceSession.all();
     const attendance = await db.orm.public.Attendance.all();
 
-    // Find classes where this student is enrolled
+    const subject = subjects.find((item) => item.id === subjectId);
+
+    if (!subject) {
+      return res.status(404).json({
+        success: false,
+        message: "Subject not found",
+      });
+    }
+
+    // ----------------------------------------
+    // Find all enrollments for this student
+    // ----------------------------------------
+
     const studentEnrollments = enrollments.filter(
-      (item) => item.studentId === studentId,
+      (enrollment) => enrollment.studentId === studentId,
     );
 
-    const enrollment = studentEnrollments.find((item) => {
-      const classItem = classes.find(
-        (classItem) => classItem.id === item.classId,
-      );
+    // ----------------------------------------
+    // Find ALL classes for this student
+    // that belong to this subject
+    // ----------------------------------------
 
-      return classItem?.subjectId === subjectId;
-    });
+    const studentClasses = studentEnrollments
+      .map((enrollment) =>
+        classes.find((classItem) => classItem.id === enrollment.classId),
+      )
+      .filter((classItem) => classItem?.subjectId === subjectId);
 
-    if (!enrollment) {
+    if (studentClasses.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Subject not found for this student",
       });
     }
 
-    const classItem = classes.find((item) => item.id === enrollment.classId);
+    // ----------------------------------------
+    // Use first matching class for displayed
+    // class/faculty information.
+    //
+    // Attendance is aggregated across ALL
+    // matching classes.
+    // ----------------------------------------
 
-    const subject = subjects.find((item) => item.id === classItem?.subjectId);
+    const classItem = studentClasses[0];
 
     const facultyItem = faculty.find(
       (item) => item.id === classItem?.facultyId,
@@ -363,19 +390,82 @@ export const getStudentSubjectDetails = async (req, res) => {
 
     const facultyUser = users.find((item) => item.id === facultyItem?.userId);
 
-    // Sessions belonging to this class
-    const classSessions = sessions.filter(
-      (item) => item.classId === classItem.id,
+    // ----------------------------------------
+    // Get sessions from ALL classes belonging
+    // to this subject
+    // ----------------------------------------
+
+    const subjectSessions = sessions.filter((session) =>
+      studentClasses.some((classItem) => classItem.id === session.classId),
     );
 
-    // Attendance records belonging to this student and these sessions
+    // ----------------------------------------
+    // Get this student's attendance across
+    // ALL subject sessions
+    // ----------------------------------------
+
     const studentAttendance = attendance.filter(
       (item) =>
         item.studentId === studentId &&
-        classSessions.some((session) => session.id === item.sessionId),
+        subjectSessions.some((session) => session.id === item.sessionId),
     );
 
-    const totalClasses = classSessions.length;
+    // ----------------------------------------
+    // DEBUG: Show every subject session
+    // including whether it was finalized
+    // ----------------------------------------
+
+    console.log(
+      "SUBJECT SESSION DETAILS:",
+      subjectSessions.map((session) => ({
+        id: session.id,
+        classId: session.classId,
+        sessionDate: session.sessionDate,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+      })),
+    );
+
+    // ----------------------------------------
+    // DEBUG: Show this student's attendance
+    // records for these sessions
+    // ----------------------------------------
+
+    console.log(
+      "SUBJECT STUDENT ATTENDANCE:",
+      studentAttendance.map((item) => ({
+        id: item.id,
+        sessionId: item.sessionId,
+        status: item.status,
+      })),
+    );
+
+    // ----------------------------------------
+    // DEBUG: Find sessions where this student
+    // has NO attendance record
+    // ----------------------------------------
+
+    const missingAttendanceSessions = subjectSessions.filter(
+      (session) =>
+        !studentAttendance.some((record) => record.sessionId === session.id),
+    );
+
+    console.log(
+      "MISSING STUDENT ATTENDANCE SESSIONS:",
+      missingAttendanceSessions.map((session) => ({
+        sessionId: session.id,
+        classId: session.classId,
+        sessionDate: session.sessionDate,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+      })),
+    );
+
+    // ----------------------------------------
+    // Attendance calculations
+    // ----------------------------------------
+
+    const totalClasses = subjectSessions.length;
 
     const present = studentAttendance.filter(
       (item) => item.status === "PRESENT",
@@ -394,8 +484,13 @@ export const getStudentSubjectDetails = async (req, res) => {
         ? Number(((present / totalClasses) * 100).toFixed(2))
         : 0;
 
+    // ----------------------------------------
+    // Response
+    // ----------------------------------------
+
     res.status(200).json({
       success: true,
+
       data: {
         subject: {
           id: subject.id,
@@ -403,13 +498,16 @@ export const getStudentSubjectDetails = async (req, res) => {
           name: subject.name,
           credits: subject.credits,
         },
+
         faculty: facultyUser?.name ?? null,
+
         class: {
           id: classItem.id,
           semester: classItem.semester,
           section: classItem.section,
           academicYear: classItem.academicYear,
         },
+
         attendance: {
           totalClasses,
           present,
@@ -421,6 +519,8 @@ export const getStudentSubjectDetails = async (req, res) => {
     });
   } catch (error) {
     console.error("Student subject details error:", error);
+
+    console.error("STACK:", error?.stack);
 
     res.status(500).json({
       success: false,
@@ -448,13 +548,15 @@ export const getStudentTimetable = async (req, res) => {
     const users = await db.orm.public.User.all();
 
     const studentEnrollments = enrollments.filter(
-      (item) => item.studentId === studentId,
+      (item) => Number(item.studentId) === Number(studentId),
     );
 
     const data = [];
 
     for (const enrollment of studentEnrollments) {
-      const classItem = classes.find((item) => item.id === enrollment.classId);
+      const classItem = classes.find(
+        (item) => Number(item.id) === Number(enrollment.classId),
+      );
 
       if (!classItem) continue;
 
@@ -467,7 +569,7 @@ export const getStudentTimetable = async (req, res) => {
       const facultyUser = users.find((item) => item.id === facultyItem?.userId);
 
       const classTimetable = timetables.filter(
-        (item) => item.classId === classItem.id,
+        (item) => Number(item.classId) === Number(classItem.id),
       );
 
       for (const timetable of classTimetable) {
@@ -531,13 +633,20 @@ export const getStudentAttendance = async (req, res) => {
       (item) => item.studentId === studentId,
     );
 
-    const data = studentEnrollments.map((enrollment) => {
+    // Aggregate attendance by subject
+    const subjectMap = new Map();
+
+    for (const enrollment of studentEnrollments) {
       const classItem = classes.find((item) => item.id === enrollment.classId);
 
-      const subject = subjects.find((item) => item.id === classItem?.subjectId);
+      if (!classItem) continue;
+
+      const subject = subjects.find((item) => item.id === classItem.subjectId);
+
+      if (!subject) continue;
 
       const classSessions = sessions.filter(
-        (session) => session.classId === classItem?.id,
+        (session) => session.classId === classItem.id,
       );
 
       const studentAttendance = attendance.filter(
@@ -560,19 +669,41 @@ export const getStudentAttendance = async (req, res) => {
         (item) => item.status === "LATE",
       ).length;
 
+      // Create subject entry if it doesn't exist
+      if (!subjectMap.has(subject.id)) {
+        subjectMap.set(subject.id, {
+          subjectId: subject.id,
+          code: subject.code,
+          subject: subject.name,
+          totalClasses: 0,
+          present: 0,
+          absent: 0,
+          late: 0,
+        });
+      }
+
+      // Add this class's attendance to the subject total
+      const subjectData = subjectMap.get(subject.id);
+
+      subjectData.totalClasses += totalClasses;
+      subjectData.present += present;
+      subjectData.absent += absent;
+      subjectData.late += late;
+    }
+
+    // Calculate percentage after all classes are aggregated
+    const data = Array.from(subjectMap.values()).map((subjectData) => {
       const percentage =
-        totalClasses > 0
-          ? Number(((present / totalClasses) * 100).toFixed(2))
+        subjectData.totalClasses > 0
+          ? Number(
+              ((subjectData.present / subjectData.totalClasses) * 100).toFixed(
+                2,
+              ),
+            )
           : 0;
 
       return {
-        subjectId: subject?.id ?? null,
-        code: subject?.code ?? null,
-        subject: subject?.name ?? null,
-        totalClasses,
-        present,
-        absent,
-        late,
+        ...subjectData,
         percentage,
       };
     });
@@ -609,6 +740,20 @@ export const getStudentAttendanceHistory = async (req, res) => {
 
     const studentAttendance = attendance.filter(
       (item) => item.studentId === studentId,
+    );
+
+    console.log("STUDENT ID:", studentId);
+    console.log("TOTAL ATTENDANCE RECORDS:", attendance.length);
+    console.log("STUDENT ATTENDANCE RECORDS:", studentAttendance.length);
+
+    console.log(
+      "STUDENT ATTENDANCE DATA:",
+      studentAttendance.map((item) => ({
+        id: item.id,
+        sessionId: item.sessionId,
+        status: item.status,
+        studentId: item.studentId,
+      })),
     );
 
     const data = studentAttendance.map((record) => {
@@ -648,6 +793,171 @@ export const getStudentAttendanceHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch attendance history",
+    });
+  }
+};
+
+export const getStudentAttendanceHistoryDetail = async (req, res) => {
+  try {
+    const studentId = await getStudentIdFromUser(req.user.id);
+    const attendanceId = Number(req.params.attendanceId);
+
+    if (!studentId) {
+      return res.status(404).json({
+        success: false,
+        message: "Student profile not found",
+      });
+    }
+
+    if (!Number.isInteger(attendanceId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid attendance ID",
+      });
+    }
+
+    // ---------------------------------------------
+    // 1. Find student's attendance record
+    // ---------------------------------------------
+
+    const attendanceRecords = await db.orm.public.Attendance.all();
+
+    const attendance = attendanceRecords.find(
+      (item) => item.id === attendanceId && item.studentId === studentId,
+    );
+
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance record not found",
+      });
+    }
+
+    // ---------------------------------------------
+    // 2. Find attendance session
+    // ---------------------------------------------
+
+    const sessions = await db.orm.public.AttendanceSession.all();
+
+    const session = sessions.find((item) => item.id === attendance.sessionId);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance session not found",
+      });
+    }
+
+    // ---------------------------------------------
+    // 3. Find class
+    // ---------------------------------------------
+
+    const classes = await db.orm.public.Class.all();
+
+    const classItem = classes.find((item) => item.id === session.classId);
+
+    // ---------------------------------------------
+    // 4. Find subject
+    // ---------------------------------------------
+
+    const subjects = await db.orm.public.Subject.all();
+
+    const subject = subjects.find((item) => item.id === classItem?.subjectId);
+
+    // ---------------------------------------------
+    // 5. Find faculty
+    // ---------------------------------------------
+
+    const facultyList = await db.orm.public.Faculty.all();
+
+    const faculty = facultyList.find(
+      (item) => item.id === classItem?.facultyId,
+    );
+
+    // ---------------------------------------------
+    // 6. Find faculty user
+    // ---------------------------------------------
+
+    const users = await db.orm.public.User.all();
+
+    const facultyUser = users.find((item) => item.id === faculty?.userId);
+
+    // ---------------------------------------------
+    // 7. Find timetable
+    // ---------------------------------------------
+
+    const timetables = await db.orm.public.Timetable.all();
+
+    const sessionDate = session.sessionDate
+      ? new Date(session.sessionDate)
+      : null;
+
+    const dayOfWeek = sessionDate ? sessionDate.getDay() : null;
+
+    const timetable = timetables.find(
+      (item) =>
+        item.classId === session.classId &&
+        (dayOfWeek === null || item.dayOfWeek === dayOfWeek),
+    );
+
+    // ---------------------------------------------
+    // 8. Return complete student-safe detail
+    // ---------------------------------------------
+
+    return res.status(200).json({
+      success: true,
+
+      data: {
+        attendanceId: attendance.id,
+        sessionId: attendance.sessionId,
+
+        status: attendance.status,
+        source: attendance.source,
+
+        date: session.sessionDate ?? null,
+        startedAt: session.startedAt ?? null,
+        endedAt: session.endedAt ?? null,
+
+        markedAt: attendance.markedAt ?? null,
+
+        subject: {
+          id: subject?.id ?? null,
+          code: subject?.code ?? null,
+          name: subject?.name ?? null,
+        },
+
+        class: {
+          id: classItem?.id ?? null,
+          semester: classItem?.semester ?? null,
+          section: classItem?.section ?? null,
+          academicYear: classItem?.academicYear ?? null,
+        },
+
+        faculty: facultyUser?.name ?? null,
+
+        timetable: timetable
+          ? {
+              id: timetable.id,
+              dayOfWeek: timetable.dayOfWeek,
+              startTime: timetable.startTime,
+              endTime: timetable.endTime,
+              room: timetable.room ?? null,
+            }
+          : null,
+
+        verification: {
+          rssi: null,
+          gps: null,
+          device: null,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Student attendance history detail error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch attendance history detail",
     });
   }
 };

@@ -3,6 +3,7 @@
  * Protected: only faculty can access this group.
  */
 import { Redirect, Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -12,6 +13,7 @@ import { Typography } from '../../constants/typography';
 
 export default function FacultyLayout() {
   const { isAuthenticated, user, isLoading } = useAuth();
+  const insets = useSafeAreaInsets();
 
   if (isLoading) return null;
   if (!isAuthenticated || !user) return <Redirect href="/login" />;
@@ -23,9 +25,16 @@ export default function FacultyLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+  styles.tabBar,
+  {
+    height: 64 + insets.bottom,
+    paddingBottom: 8 + insets.bottom,
+  },
+],
         tabBarActiveTintColor: Colors.primaryContainer,
         tabBarInactiveTintColor: Colors.onSurfaceVariant,
         tabBarLabelStyle: styles.tabLabel,

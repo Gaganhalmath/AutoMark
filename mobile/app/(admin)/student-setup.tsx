@@ -7,18 +7,22 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { apiRequest } from '../../services/api';
+import { useAuth } from '../../auth/AuthProvider';
 
 export default function StudentAccountSetupScreen() {
   const router = useRouter();
+  const { tokens } = useAuth();
 
   const [name, setName] = useState('');
   const [usn, setUsn] = useState('');
   const [email, setEmail] = useState('');
   const [dept, setDept] = useState('Computer Science');
-  const [semester, setSemester] = useState('6th Semester');
-  const [section, setSection] = useState('Section A');
+  const [semester, setSemester] = useState('6');
+const [section, setSection] = useState('A');
 
   const handleCreate = async () => {
+    console.log("CREATE BUTTON CODE IS RUNNING");
+    alert("CREATE BUTTON CODE IS RUNNING");
   if (!name || !usn || !email) {
     Alert.alert(
       'Incomplete Form',
@@ -28,8 +32,18 @@ export default function StudentAccountSetupScreen() {
   }
 
   try {
-    const response = await apiRequest('/admin/students', {
+    console.log(
+  'ADMIN STUDENT CREATE TOKEN:',
+  tokens?.accessToken ? 'TOKEN EXISTS' : 'NO TOKEN'
+);
+    const response = await apiRequest<{
+  data: {
+    name: string;
+    usn: string;
+  };
+}>('/admin/students', {
       method: 'POST',
+      token: tokens?.accessToken,
       body: {
         name: name.trim(),
         email: email.trim(),
@@ -89,7 +103,7 @@ export default function StudentAccountSetupScreen() {
           <Text style={styles.label}>University Seat Number (USN) *</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. 01CS123"
+            placeholder="e.g. 2023CS101"
             placeholderTextColor="#94A3B8"
             value={usn}
             onChangeText={setUsn}

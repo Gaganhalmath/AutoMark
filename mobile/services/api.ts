@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://192.168.6.213:5000/api";
+const API_BASE_URL = "http://192.168.212.213:5000/api";
 
 type ApiOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";

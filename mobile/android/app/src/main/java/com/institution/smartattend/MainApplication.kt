@@ -11,10 +11,10 @@ import com.facebook.react.ReactHost
 import com.facebook.react.common.ReleaseLevel
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 
+import com.smartattend.ble.SmartAttendBlePackage
+
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
-
-import com.smartattend.ble.SmartAttendBlePackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -22,9 +22,9 @@ class MainApplication : Application(), ReactApplication {
     ExpoReactHostFactory.getDefaultReactHost(
       context = applicationContext,
       packageList =
-        PackageList(this).packages.apply {
-          add(SmartAttendBlePackage())
-        }
+  PackageList(this).packages.apply {
+    add(SmartAttendBlePackage())
+  }
     )
   }
 

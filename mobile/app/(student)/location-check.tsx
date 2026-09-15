@@ -1,10 +1,11 @@
 /**
- * SmartAttend — Location Check in Progress Screen
+ * SmartAttend — BLE Proximity Check Screen
  *
  * Real flow:
  * 1. Receive BLE session ID + RSSI from attendance-check
- * 2. Perform the existing location verification UI
- * 3. Pass session ID + RSSI to final confirmation screen
+ * 2. Estimate approximate distance from faculty device using RSSI
+ * 3. Display proximity information
+ * 4. Pass session ID + RSSI to final confirmation screen
  */
 
 import React, { useEffect, useState } from 'react';
@@ -20,37 +21,87 @@ import {
 } from 'expo-router';
 import { Colors } from '../../constants/colors';
 
+function estimateDistance(rssi: number): number {
+  // Approximate BLE distance model.
+  // RSSI-based distance is affected by walls, people,
+  // phone orientation, and radio interference.
+  const measuredPower = -59;
+  const pathLossExponent = 2;
+
+  const distance = Math.pow(
+    10,
+    (measuredPower - rssi) / (10 * pathLossExponent)
+  );
+
+  // Keep the displayed value within a sensible range.
+  return Math.max(0.1, Math.min(distance, 100));
+}
+
+function formatDistance(distance: number): string {
+  if (distance < 1) {
+    return `${distance.toFixed(1)} m`;
+  }
+
+  if (distance < 10) {
+    return `${distance.toFixed(1)} m`;
+  }
+
+  return `${Math.round(distance)} m`;
+}
+
 export default function LocationCheckScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
   const sessionId = params.sessionId as string | undefined;
-  const rssi = params.rssi as string | undefined;
+  const rssiParam = params.rssi as string | undefined;
 
-  const [distance, setDistance] = useState(15.4);
+  const rssi = rssiParam ? Number(rssiParam) : null;
+
+  const [distance, setDistance] = useState<number | null>(null);
   const [status, setStatus] = useState(
-    'Acquiring High-Precision GPS Lock...'
+    'Checking proximity to faculty device...'
   );
 
   useEffect(() => {
+    if (rssi === null || Number.isNaN(rssi)) {
+      setStatus('Unable to determine BLE signal strength.');
+      return;
+    }
+
+    const estimatedDistance = estimateDistance(rssi);
+
+    setDistance(estimatedDistance);
+    setStatus('Faculty device detected within BLE range.');
+
     const timer = setTimeout(() => {
-      setDistance(2.1);
-      setStatus(
-        'Inside Classroom Geofence Zone (LHC-101)'
-      );
+      router.replace({
+  pathname: '/(student)/all-checks-passed',
+  params: {
+    sessionId: sessionId || '',
+    rssi: String(rssi),
 
-      const nextTimer = setTimeout(() => {
-        router.replace({
-          pathname: '/(student)/all-checks-passed',
-          params: {
-            sessionId: sessionId || '',
-            rssi: rssi || '',
-          },
-        });
-      }, 1200);
+    // Carry real class/session details forward
+    subjectName:
+      (params.subjectName as string) || '',
 
-      return () => clearTimeout(nextTimer);
-    }, 1500);
+    subjectCode:
+      (params.subjectCode as string) || '',
+
+    room:
+      (params.room as string) || '',
+
+    faculty:
+      (params.faculty as string) || '',
+
+    scheduledStart:
+      (params.scheduledStart as string) || '',
+
+    scheduledEnd:
+      (params.scheduledEnd as string) || '',
+  },
+});
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [sessionId, rssi]);
@@ -58,39 +109,57 @@ export default function LocationCheckScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
+
+        {/* Proximity visualization */}
         <View style={styles.mapCard}>
-          <Text style={styles.pinIcon}>📍</Text>
+          <Text style={styles.pinIcon}>📡</Text>
 
           <View style={styles.circleRipple} />
 
           <Text style={styles.roomTag}>
-            LHC-101 (CS Dept)
+            Faculty Device
           </Text>
         </View>
 
         <Text style={styles.title}>
-          Location Verification
+          Proximity Verification
         </Text>
 
         <Text style={styles.subtitle}>
-          Ensuring your physical location matches the
-          scheduled classroom coordinates.
+          Checking your approximate distance from the
+          faculty attendance device using BLE signal strength.
         </Text>
 
         <View style={styles.statusBox}>
+
           <View style={styles.distanceBadge}>
             <Text style={styles.distanceValue}>
-              {distance} m
+              {distance !== null
+                ? formatDistance(distance)
+                : '--'}
             </Text>
 
             <Text style={styles.distanceLabel}>
-              Distance to Beacon
+              Approx. Distance from Faculty
             </Text>
           </View>
 
           <Text style={styles.statusText}>
             {status}
           </Text>
+
+          {rssi !== null && !Number.isNaN(rssi) && (
+            <View style={styles.signalInfo}>
+              <Text style={styles.signalLabel}>
+                BLE SIGNAL
+              </Text>
+
+              <Text style={styles.signalValue}>
+                {rssi} dBm
+              </Text>
+            </View>
+          )}
+
         </View>
       </View>
 
@@ -161,12 +230,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
     marginBottom: 8,
+    textAlign: 'center',
   },
 
   subtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
     textAlign: 'center',
+    lineHeight: 20,
     marginBottom: 32,
   },
 
@@ -193,12 +264,37 @@ const styles = StyleSheet.create({
   distanceLabel: {
     fontSize: 12,
     color: Colors.textSecondary,
+    textAlign: 'center',
   },
 
   statusText: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.success,
+    textAlign: 'center',
+  },
+
+  signalInfo: {
+    width: '100%',
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+
+  signalLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    letterSpacing: 1,
+  },
+
+  signalValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginTop: 3,
   },
 
   secondaryBtn: {

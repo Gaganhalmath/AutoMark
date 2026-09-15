@@ -10,16 +10,23 @@
  * - 2×3 Quick Actions grid
  * - Academic daily insight banner
  */
-import React from 'react';
+import React, {
+  useCallback,
+  useState,
+} from 'react';
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useRouter,
+} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../auth/AuthProvider';
@@ -35,52 +42,102 @@ export default function StudentHomeScreen() {
   const [student, setStudent] = React.useState<any>(null);
 const [timetable, setTimetable] = React.useState<any[]>([]);
 const [attendance, setAttendance] = React.useState<any[]>([]);
-const [loading, setLoading] = React.useState(true);
-const [error, setError] = React.useState<string | null>(null);
+const [loading, setLoading] = useState(true);
+const [refreshing, setRefreshing] = useState(false);
+const [error, setError] = useState<string | null>(null);
 
-React.useEffect(() => {
-  const loadDashboard = async () => {
-  try {
-    if (!tokens?.accessToken) {
-      return;
-    }
+const loadDashboard = useCallback(
+  async (isPullToRefresh = false) => {
+    try {
+      if (!tokens?.accessToken) {
+        setError('Authentication token is missing.');
+        setLoading(false);
+        return;
+      }
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${tokens.accessToken}`,
-    };
+      if (isPullToRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
-    const [dashboardResponse, timetableResponse, attendanceResponse] =
-      await Promise.all([
+      setError('');
+
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tokens.accessToken}`,
+      };
+
+      const [
+        dashboardResponse,
+        timetableResponse,
+        attendanceResponse,
+      ] = await Promise.all([
         getStudentDashboard(tokens.accessToken),
 
         fetch(
-          'http://192.168.6.213:5000/api/student/timetable',
-          { headers }
+          'http://192.168.212.213:5000/api/student/timetable',
+          { headers },
         ),
 
         fetch(
-          'http://192.168.6.213:5000/api/student/attendance',
-          { headers }
+          'http://192.168.212.213:5000/api/student/attendance',
+          { headers },
         ),
       ]);
 
-    const timetableResult = await timetableResponse.json();
-    const attendanceResult = await attendanceResponse.json();
+      const timetableResult =
+        await timetableResponse.json();
 
-    setStudent(dashboardResponse.data.student);
-    setTimetable(timetableResult.data || []);
-    setAttendance(attendanceResult.data || []);
-  } catch (err: any) {
-    console.error('Student dashboard error:', err);
-    setError(err.message || 'Failed to load dashboard');
-  } finally {
-    setLoading(false);
-  }
-};
+      const attendanceResult =
+        await attendanceResponse.json();
 
-  loadDashboard();
-}, [tokens?.accessToken]);
+      if (
+        !timetableResponse.ok ||
+        !timetableResult.success
+      ) {
+        throw new Error(
+          timetableResult?.message ||
+            'Failed to load timetable.',
+        );
+      }
+
+      if (
+        !attendanceResponse.ok ||
+        !attendanceResult.success
+      ) {
+        throw new Error(
+          attendanceResult?.message ||
+            'Failed to load attendance.',
+        );
+      }
+
+      setStudent(dashboardResponse.data.student);
+      setTimetable(timetableResult.data || []);
+      setAttendance(attendanceResult.data || []);
+    } catch (err: any) {
+      console.error(
+        'Student dashboard error:',
+        err,
+      );
+
+      setError(
+        err?.message ||
+          'Failed to load dashboard',
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  },
+  [tokens?.accessToken],
+);
+
+useFocusEffect(
+  useCallback(() => {
+    loadDashboard();
+  }, [loadDashboard]),
+);
 
 const totalClasses = attendance.reduce(
   (sum, item) => sum + Number(item.totalClasses || 0),
@@ -97,8 +154,116 @@ const overallPercentage =
     ? Number(((totalPresent / totalClasses) * 100).toFixed(2))
     : 0;
 
-const firstClass = timetable.length > 0 ? timetable[0] : null;
+    const getNextClass = (items: any[]) => {
+  if (!items || items.length === 0) {
+    return null;
+  }
 
+  const now = new Date();
+  const currentDay = now.getDay();
+  const currentMinutes =
+    now.getHours() * 60 + now.getMinutes();
+
+  const parseTime = (time: string) => {
+  if (!time) return 0;
+
+  const parts = time.split(':');
+
+  const hour = Number(parts[0]);
+  const minute = Number(parts[1] ?? 0);
+
+  return hour * 60 + minute;
+};
+
+  // First: classes happening today
+  const todayClasses = items
+    .filter(
+      (item) =>
+        Number(item.dayOfWeek) === currentDay
+    )
+    .sort(
+      (a, b) =>
+        parseTime(a.startTime) -
+        parseTime(b.startTime)
+    );
+
+  // Currently ongoing class
+  const ongoingClass = todayClasses.find((item) => {
+    const start = parseTime(item.startTime);
+    const end = parseTime(item.endTime);
+
+    return currentMinutes >= start && currentMinutes < end;
+  });
+
+  if (ongoingClass) {
+    return ongoingClass;
+  }
+
+  // Next class today
+  const nextToday = todayClasses.find(
+    (item) =>
+      parseTime(item.startTime) > currentMinutes
+  );
+
+  if (nextToday) {
+    return nextToday;
+  }
+
+  // No more classes today.
+  // Find the next class in the upcoming days.
+  const upcomingClasses = items
+    .map((item) => {
+      const day = Number(item.dayOfWeek);
+
+      let daysUntil = day - currentDay;
+
+      if (daysUntil <= 0) {
+        daysUntil += 7;
+      }
+
+      return {
+        item,
+        daysUntil,
+        startMinutes: parseTime(item.startTime),
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.daysUntil - b.daysUntil ||
+        a.startMinutes - b.startMinutes
+    );
+
+  return upcomingClasses[0]?.item || null;
+};
+
+const firstClass = getNextClass(timetable);
+const isCurrentClass = (() => {
+  if (!firstClass) return false;
+
+  const now = new Date();
+  const currentDay = now.getDay();
+  const currentMinutes =
+    now.getHours() * 60 + now.getMinutes();
+
+  const parseTime = (time: string) => {
+    if (!time) return 0;
+
+    const parts = time.split(':');
+    const hour = Number(parts[0]);
+    const minute = Number(parts[1] ?? 0);
+
+    return hour * 60 + minute;
+  };
+
+  const start = parseTime(firstClass.startTime);
+  const end = parseTime(firstClass.endTime);
+
+  return (
+    Number(firstClass.dayOfWeek) === currentDay &&
+    currentMinutes >= start &&
+    currentMinutes < end
+  );
+})();
 const subjectForDetails =
   attendance.length > 0
     ? attendance[0]?.subject?.name || 'Subject Details'
@@ -178,14 +343,29 @@ const formatTime = (time: string) => {
       onPress: () => router.push('/(student)/notifications'),
     },
     {
-      id: 'help',
-      label: 'Subject Details',
-      sub: subjectForDetails || 'Subject Details',
-      icon: 'book-outline' as const,
-      iconBg: Colors.secondaryFixed,
-      iconColor: Colors.onSecondaryContainer,
-      onPress: () => router.push('/(student)/subject-details'),
-    },
+  id: 'help',
+  label: 'Subject Details',
+  sub: subjectForDetails || 'Subject Details',
+  icon: 'book-outline' as const,
+  iconBg: Colors.secondaryFixed,
+  iconColor: Colors.onSecondaryContainer,
+  onPress: () => {
+    const subjectId =
+      attendance[0]?.subject?.id ||
+      firstClass?.subject?.id;
+
+    if (subjectId) {
+      router.push({
+        pathname: '/(student)/subject-details',
+        params: {
+          id: String(subjectId),
+        },
+      });
+    } else {
+      console.log('No subject ID available for Subject Details');
+    }
+  },
+},
   ];
 if (loading) {
   return (
@@ -226,10 +406,18 @@ if (error || !student) {
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+  style={styles.scroll}
+  contentContainerStyle={styles.scrollContent}
+  showsVerticalScrollIndicator={false}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => loadDashboard(true)}
+      colors={[Colors.primary]}
+      tintColor={Colors.primary}
+    />
+  }
+>
         {/* ── Greeting ─────────────────────────────────────────────────── */}
         <View style={styles.greetRow}>
           <View>
@@ -237,7 +425,7 @@ if (error || !student) {
               Hello, {student.name.split(' ')[0]} 👋
             </Text>
             <Text style={styles.greetSub}>
-              {student.registerNumber} • {student.department} • Semester {student.semester} • Section {student.section}
+              {student.registerNumber} • Semester {student.semester} • Section {student.section}
             </Text>
           </View>
           <View style={styles.notifBtnWrap}>
@@ -258,7 +446,7 @@ if (error || !student) {
             <View style={styles.heroTopRow}>
               <View style={styles.heroNextClassBadge}>
                 <View style={styles.heroLiveDot} />
-                <Text style={styles.heroNextClassLabel}>Next Class</Text>
+                <Text style={styles.heroNextClassLabel}>{isCurrentClass ? 'CURRENT CLASS' : 'NEXT CLASS'}</Text>
               </View>
               <View style={styles.heroTimePill}>
                 <Text style={styles.heroTimePillText}>

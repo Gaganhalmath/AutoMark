@@ -22,7 +22,12 @@ export const createDepartment = async (req, res) => {
   try {
     const { name, code } = req.body;
 
-    if (!name || !code) {
+    const normalizedName = String(name ?? "").trim();
+    const normalizedCode = String(code ?? "")
+      .trim()
+      .toUpperCase();
+
+    if (!normalizedName || !normalizedCode) {
       return res.status(400).json({
         success: false,
         message: "Name and code are required",
@@ -30,8 +35,8 @@ export const createDepartment = async (req, res) => {
     }
 
     const department = await db.orm.public.Department.create({
-      name,
-      code,
+      name: normalizedName,
+      code: normalizedCode,
     });
 
     res.status(201).json({

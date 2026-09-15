@@ -5,6 +5,8 @@ import {
   getFacultyTimetable,
 } from "../controllers/facultyController.js";
 
+import { getClassDetails } from "../controllers/classController.js";
+
 import {
   getFacultyNotifications,
   markNotificationAsRead,
@@ -36,6 +38,8 @@ router.get(
 );
 
 router.get("/classes", authenticate, authorize("FACULTY"), getFacultyClasses);
+
+router.get("/classes/:id", authenticate, authorize("FACULTY"), getClassDetails);
 
 router.get(
   "/attendance/history",

@@ -2,17 +2,23 @@
  * SmartAttend — Student Timetable Screen
  * Real backend timetable + reference UI
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../auth/AuthProvider';
@@ -23,6 +29,7 @@ import { Shadow, Spacing } from '../../constants/spacing';
 
 type TimetableItem = {
   id: number | string;
+  classId: number | string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
@@ -118,6 +125,7 @@ const getDayName = (dayNumber: number) => {
     'Thursday',
     'Friday',
     'Saturday',
+    'Sunday',
   ];
 
   return days[dayNumber] || '';
@@ -180,32 +188,52 @@ export default function TimetableScreen() {
   const router = useRouter();
 
   const [timetable, setTimetable] = useState<TimetableItem[]>([]);
-  const [selectedDay, setSelectedDay] = useState('Mon');
+  const getTodayKey = () => {
+  const day = new Date().getDay();
+
+  const dayKeys = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  return dayKeys[day];
+};
+
+const [selectedDay, setSelectedDay] = useState(getTodayKey());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState<string | null>(null);
+const [refreshing, setRefreshing] = useState(false);
 
   /*
    * Build the current Monday-Friday week dynamically.
    */
-  const DAYS: DayItem[] = useMemo(() => {
-    const monday = getMonday(new Date());
+  /*
+ * Build the current Monday-Sunday week dynamically.
+ */
+const DAYS: DayItem[] = useMemo(() => {
+  const monday = getMonday(new Date());
 
-    return Array.from({ length: 5 }, (_, index) => {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + index);
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
 
-      const key = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][index];
+    const key = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+    ][index];
 
-      return {
-        key,
-        label: key,
-        date: formatDateNumber(date),
-        month: formatMonth(date),
-        fullDate: getFullDayName(date),
-        dayNumber: date.getDay(),
-      };
-    });
-  }, []);
+    return {
+      key,
+      label: key,
+      date: formatDateNumber(date),
+      month: formatMonth(date),
+      fullDate: getFullDayName(date),
+      dayNumber: index + 1,
+    };
+  });
+}, []);
 
   const selectedDayInfo =
     DAYS.find((day) => day.key === selectedDay) || DAYS[0];
@@ -213,46 +241,63 @@ export default function TimetableScreen() {
   /*
    * Load real timetable from backend.
    */
-  useEffect(() => {
-    const loadTimetable = async () => {
-      try {
-        if (!tokens?.accessToken) {
-          return;
-        }
+  const loadTimetable = useCallback(
+  async (isPullToRefresh = false) => {
+    if (!tokens?.accessToken) {
+      setLoading(false);
+      return;
+    }
 
+    try {
+      if (isPullToRefresh) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
-        setError(null);
-
-        const response = await fetch(
-          'http://192.168.6.213:5000/api/student/timetable',
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${tokens.accessToken}`,
-            },
-          }
-        );
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result?.message || 'Failed to load timetable'
-          );
-        }
-
-        setTimetable(result?.data || []);
-      } catch (err: any) {
-        console.error('Student timetable error:', err);
-        setError(err?.message || 'Failed to load timetable');
-      } finally {
-        setLoading(false);
       }
-    };
 
-    loadTimetable();
-  }, [tokens?.accessToken]);
+      setError(null);
 
+      const response = await fetch(
+        'http://192.168.212.213:5000/api/student/timetable',
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens.accessToken}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      console.log("STUDENT TIMETABLE RESPONSE:", JSON.stringify(result, null, 2));
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message || 'Failed to load timetable'
+        );
+      }
+
+      setTimetable(result?.data || []);
+    } catch (err: any) {
+      console.error('Student timetable error:', err);
+      setError(err?.message || 'Failed to load timetable');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  },
+  [tokens?.accessToken]
+);
+
+useEffect(() => {
+  loadTimetable();
+}, [loadTimetable]);
+
+useFocusEffect(
+  useCallback(() => {
+    loadTimetable(true);
+  }, [loadTimetable])
+);
   /*
    * Get classes for selected day.
    */
@@ -276,37 +321,38 @@ export default function TimetableScreen() {
    * Determine class status based on current time.
    */
   const getClassStatus = (cls: TimetableItem) => {
-    const now = new Date();
+  const now = new Date();
 
-    const today = now.getDay();
+  // SmartAttend uses Monday = 1 ... Sunday = 7
+  const today =
+    now.getDay() === 0 ? 7 : now.getDay();
 
-    if (
-      !selectedDayInfo ||
-      today !== selectedDayInfo.dayNumber
-    ) {
-      return 'upcoming' as const;
-    }
-
-    const currentMinutes =
-      now.getHours() * 60 + now.getMinutes();
-
-    const startMinutes = parseTimeToMinutes(cls.startTime);
-    const endMinutes = parseTimeToMinutes(cls.endTime);
-
-    if (currentMinutes >= endMinutes) {
-      return 'past' as const;
-    }
-
-    if (
-      currentMinutes >= startMinutes &&
-      currentMinutes < endMinutes
-    ) {
-      return 'ongoing' as const;
-    }
-
+  if (
+    !selectedDayInfo ||
+    today !== selectedDayInfo.dayNumber
+  ) {
     return 'upcoming' as const;
-  };
+  }
 
+  const currentMinutes =
+    now.getHours() * 60 + now.getMinutes();
+
+  const startMinutes = parseTimeToMinutes(cls.startTime);
+  const endMinutes = parseTimeToMinutes(cls.endTime);
+
+  if (currentMinutes >= endMinutes) {
+    return 'past' as const;
+  }
+
+  if (
+    currentMinutes >= startMinutes &&
+    currentMinutes < endMinutes
+  ) {
+    return 'ongoing' as const;
+  }
+
+  return 'upcoming' as const;
+};
   /*
    * Find the first upcoming class and mark it as Next Up.
    */
@@ -327,6 +373,100 @@ export default function TimetableScreen() {
 
     return next?.id ?? null;
   }, [classes, selectedDayInfo]);
+
+  const checkAndOpenAttendance = async (cls: TimetableItem) => {
+  const status = getClassStatus(cls);
+
+  console.log('VERIFY CLASS STATUS:', status);
+  console.log('VERIFY CLASS:', JSON.stringify(cls, null, 2));
+
+  if (status !== 'ongoing') {
+    console.log('VERIFY BLOCKED: CLASS IS NOT ONGOING');
+    return;
+  }
+
+  if (!tokens?.accessToken) {
+    console.log('VERIFY BLOCKED: NO ACCESS TOKEN');
+    return;
+  }
+
+  try {
+    setCheckingSession(String(cls.classId));
+
+    const response = await fetch(
+      `http://192.168.212.213:5000/api/attendance/student/active-session/${cls.classId}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens.accessToken}`,
+        },
+      }
+    );
+
+    const result = await response.json();
+
+    console.log('ACTIVE SESSION STATUS:', response.status);
+console.log(
+  'ACTIVE SESSION RESPONSE:',
+  JSON.stringify(result, null, 2)
+);
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result?.message || 'Unable to check attendance session'
+      );
+    }
+
+    if (!result.data?.active || !result.data?.sessionId) {
+      return;
+    }
+
+    const session = result.data;
+
+    const sessionId = String(session.sessionId);
+
+    router.push({
+      pathname: '/(student)/attendance-check',
+      params: {
+        sessionId,
+
+        subjectName:
+          session.class?.subject?.name ||
+          getSubjectName(cls),
+
+        subjectCode:
+          session.class?.subject?.code ||
+          getSubjectCode(cls),
+
+        room:
+          session.class?.room ||
+          cls.room ||
+          '',
+
+        faculty:
+          session.class?.faculty ||
+          getFacultyName(cls),
+
+        scheduledStart:
+          session.scheduledStart
+            ? String(session.scheduledStart)
+            : cls.startTime,
+
+        scheduledEnd:
+          session.scheduledEnd
+            ? String(session.scheduledEnd)
+            : cls.endTime,
+      },
+    });
+  } catch (err) {
+    console.error(
+      'Student attendance session check error:',
+      err
+    );
+  } finally {
+    setCheckingSession(null);
+  }
+};
 
   const renderLoading = () => (
     <View style={styles.centerState}>
@@ -361,7 +501,7 @@ export default function TimetableScreen() {
 
           if (tokens?.accessToken) {
             fetch(
-              'http://192.168.6.213:5000/api/student/timetable',
+              'http://192.168.212.213:5000/api/student/timetable',
               {
                 headers: {
                   'Content-Type': 'application/json',
@@ -404,7 +544,7 @@ export default function TimetableScreen() {
 
           <View>
             <Text style={styles.headerBrand}>
-              SmartAttend
+              AuroMark
             </Text>
             <Text style={styles.headerTitle}>
               Timetable
@@ -437,10 +577,16 @@ export default function TimetableScreen() {
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+  style={styles.scroll}
+  contentContainerStyle={styles.scrollContent}
+  showsVerticalScrollIndicator={false}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => loadTimetable(true)}
+    />
+  }
+>
         {/* Page title */}
         <View style={styles.pageHeader}>
           <View style={styles.pageHeaderLeft}>
@@ -461,20 +607,24 @@ export default function TimetableScreen() {
               </Text>
 
               <Text style={styles.pageSubtitle}>
-                B.Tech Computer Science
+                B.E Computer Science
               </Text>
             </View>
           </View>
         </View>
 
-        {/* 5-day selector */}
+        {/* 6-day selector */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.dayScroll}
         >
-          <View style={styles.dayRow}>
-            {DAYS.map((day) => {
+          <ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={styles.dayRow}
+>
+  {DAYS.map((day) => {
               const active = selectedDay === day.key;
 
               return (
@@ -515,7 +665,7 @@ export default function TimetableScreen() {
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
         </ScrollView>
 
         {/* Day header */}
@@ -583,20 +733,15 @@ export default function TimetableScreen() {
                   nextClassId === cls.id;
 
                 return (
-                  <Pressable
-                    key={String(cls.id)}
-                    style={[
-                      styles.classCard,
-                      {
-                        backgroundColor: colors.bg,
-                      },
-                    ]}
-                    onPress={() =>
-                      router.push(
-                        '/(student)/attendance-reminder'
-                      )
-                    }
-                  >
+                  <View
+  key={String(cls.id)}
+  style={[
+    styles.classCard,
+    {
+      backgroundColor: colors.bg,
+    },
+  ]}
+>
                     {/* Left strip */}
                     <View
                       style={[
@@ -733,59 +878,33 @@ export default function TimetableScreen() {
                         </View>
 
                         {isOngoing ? (
-                          <Pressable
-                            style={styles.verifyRow}
-                            onPress={() =>
-                              router.push(
-                                '/(student)/attendance-check'
-                              )
-                            }
-                          >
-                            <Text
-                              style={styles.verifyText}
-                            >
-                              Verify Presence
-                            </Text>
+ <Pressable
+  style={styles.verifyRow}
+  onPress={() => {
+    console.log('VERIFY PRESENCE PRESSED');
+    checkAndOpenAttendance(cls);
+  }}
+>
+    <Text style={styles.verifyText}>
+      Verify Presence
+    </Text>
 
-                            <Ionicons
-                              name="arrow-forward"
-                              size={14}
-                              color={
-                                Colors.primaryContainer
-                              }
-                            />
-                          </Pressable>
-                        ) : (
+    <Ionicons
+      name="arrow-forward"
+      size={14}
+      color={Colors.primaryContainer}
+    />
+  </Pressable>
+) : (
                           <Text style={styles.facultyText}>
                             {getFacultyName(cls)}
                           </Text>
                         )}
                       </View>
                     </View>
-                  </Pressable>
+                  </View>
                 );
               })
-            )}
-
-            {/* Lunch break */}
-            {classes.length > 2 && (
-              <View style={styles.lunchBreak}>
-                <View style={styles.lunchLine} />
-
-                <View style={styles.lunchPill}>
-                  <Ionicons
-                    name="restaurant-outline"
-                    size={14}
-                    color={Colors.primaryContainer}
-                  />
-
-                  <Text style={styles.lunchText}>
-                    Lunch Break • 12:15 PM – 02:00 PM
-                  </Text>
-                </View>
-
-                <View style={styles.lunchLine} />
-              </View>
             )}
 
             {/* Tip card */}
@@ -800,8 +919,8 @@ export default function TimetableScreen() {
                 </View>
 
                 <Text style={styles.tipText}>
-                  Tap on any class to view details and
-                  attendance status.
+                  Tap on a class to check whether attendance
+verification is currently available.
                 </Text>
 
                 <Ionicons
@@ -1176,34 +1295,6 @@ const styles = StyleSheet.create({
     ...Typography.labelXs,
     color: Colors.primaryContainer,
     fontWeight: '600',
-  },
-
-  lunchBreak: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginVertical: 4,
-  },
-
-  lunchLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.surfaceContainerHighest,
-  },
-
-  lunchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: 100,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-
-  lunchText: {
-    ...Typography.labelXs,
-    color: Colors.onSurfaceVariant,
   },
 
   tipCard: {

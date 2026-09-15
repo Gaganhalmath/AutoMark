@@ -20,13 +20,15 @@ export const login = async (req, res) => {
     const faculties = await db.orm.public.Faculty.all();
 
     let user = users.find(
-      (item) => item.email.toLowerCase() === normalizedIdentifier,
+      (item) => String(item.email || "").toLowerCase() === normalizedIdentifier,
     );
 
     // Student login using USN / register number
     if (!user) {
       const student = students.find(
-        (item) => item.registerNumber.toLowerCase() === normalizedIdentifier,
+        (item) =>
+          String(item.registerNumber || "").toLowerCase() ===
+          normalizedIdentifier,
       );
 
       if (student) {
@@ -37,7 +39,8 @@ export const login = async (req, res) => {
     // Faculty login using Faculty ID / employee ID
     if (!user) {
       const faculty = faculties.find(
-        (item) => item.employeeId.toLowerCase() === normalizedIdentifier,
+        (item) =>
+          String(item.employeeId || "").toLowerCase() === normalizedIdentifier,
       );
 
       if (faculty) {
@@ -68,7 +71,12 @@ export const login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user);
+    // Department comes directly from the database.
+    // Super Admin has no department restriction.
+    const departmentId =
+      user.role === "SUPER_ADMIN" ? null : (user.departmentId ?? null);
+
+    const token = generateToken(user, departmentId);
 
     return res.status(200).json({
       success: true,
@@ -79,6 +87,7 @@ export const login = async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          departmentId,
         },
         token,
       },
@@ -92,6 +101,7 @@ export const login = async (req, res) => {
     });
   }
 };
+
 export const getMe = async (req, res) => {
   try {
     const users = await db.orm.public.User.all();
@@ -105,7 +115,10 @@ export const getMe = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    const departmentId =
+      user.role === "SUPER_ADMIN" ? null : (user.departmentId ?? null);
+
+    return res.status(200).json({
       success: true,
       data: {
         id: user.id,
@@ -113,12 +126,13 @@ export const getMe = async (req, res) => {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
+        departmentId,
       },
     });
   } catch (error) {
     console.error("Get current user error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch current user",
     });

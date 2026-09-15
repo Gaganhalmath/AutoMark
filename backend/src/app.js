@@ -13,6 +13,7 @@ import studentApiRoutes from "./routes/studentApiRoutes.js";
 import facultyApiRoutes from "./routes/facultyApiRoutes.js";
 import studentDeviceRoutes from "./routes/studentDeviceRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import adminUserRoutes from "./routes/adminUserRoutes.js";
 
 const app = express();
 
@@ -45,5 +46,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/student", studentApiRoutes);
 app.use("/api/student", studentDeviceRoutes);
 app.use("/api/faculty", facultyApiRoutes);
+app.use("/api/admin/users", adminUserRoutes);
 
 export default app;

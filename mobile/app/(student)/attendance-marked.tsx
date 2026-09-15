@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'http://192.168.6.213:5000/api';
+const API_BASE_URL = 'http://192.168.212.213:5000/api';
 
 type AttendanceRecord = {
   attendanceId: number;
@@ -255,7 +255,7 @@ export default function AttendanceMarkedScreen() {
 
         <Text style={styles.subtitle}>
           Your attendance has been successfully
-          recorded and verified by SmartAttend.
+          recorded and verified by AutoMark.
         </Text>
 
         <View style={styles.receiptCard}>

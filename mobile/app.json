@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SmartAttend",
-    "slug": "SmartAttend",
+    "name": "AutoMark",
+    "slug": "AutoMark",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -33,7 +33,8 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-font",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-splash-screen"
     ]
   }
 }

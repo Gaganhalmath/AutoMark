@@ -1,7 +1,9 @@
 // use prisma-next
 
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
+  HOD
   FACULTY
   STUDENT
 }
@@ -17,6 +19,13 @@ enum AttendanceSource {
   MANUAL
 }
 
+enum Designation {
+  HOD
+  PROFESSOR
+  ASSOCIATE_PROFESSOR
+  ASSISTANT_PROFESSOR
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   name         String
@@ -24,10 +33,12 @@ model User {
   passwordHash String
   role         UserRole
   isActive     Boolean  @default(true)
+  departmentId Int?
 
   student      Student?
   faculty      Faculty?
   notifications Notification[]
+  auditLogs    AuditLog[]
 
   createdAt    TimestamptzString @default(now())
   updatedAt    temporal.updatedAtString()
@@ -42,6 +53,7 @@ model Department {
   faculty     Faculty[]
   subjects    Subject[]
   classes     Class[]
+  labBatches  LabBatch[]
 
   createdAt   TimestamptzString @default(now())
   updatedAt   temporal.updatedAtString()
@@ -54,6 +66,7 @@ model Student {
   departmentId   Int
   semester       Int
   section        String
+  Lab            String   ?
   academicYear   String
 
   user           User       @relation(fields: [userId], references: [id])
@@ -61,6 +74,7 @@ model Student {
   enrollments    Enrollment[]
   attendance     Attendance[]
   devices        StudentDevice[]
+  studentBatches StudentBatch[]
 
   createdAt      TimestamptzString @default(now())
   updatedAt      temporal.updatedAtString()
@@ -83,6 +97,7 @@ model Faculty {
   userId       Int      @unique
   employeeId   String   @unique
   departmentId Int
+  designation  Designation @default(ASSISTANT_PROFESSOR)
 
   user         User       @relation(fields: [userId], references: [id])
   department   Department @relation(fields: [departmentId], references: [id])
@@ -120,6 +135,7 @@ model Class {
   department   Department @relation(fields: [departmentId], references: [id])
   enrollments  Enrollment[]
   timetable    Timetable[]
+  timetableSlots TimetableSlot[]
   sessions     AttendanceSession[]
 
   createdAt    TimestamptzString @default(now())
@@ -206,3 +222,67 @@ model Notification {
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model TimetableSlot {
+  id          Int          @id @default(autoincrement())
+  classId     Int?
+  class       Class?        @relation(fields: [classId], references: [id])
+  dayOfWeek   DayOfWeek
+  startTime   String
+  endTime     String
+  isLab       Boolean      @default(false)
+  batchId     Int?
+  batch       LabBatch?    @relation(fields: [batchId], references: [id])
+
+  createdAt   TimestamptzString @default(now())
+  updatedAt   temporal.updatedAtString()
+}
+
+model LabBatch {
+  id             Int             @id @default(autoincrement())
+  name           String
+  departmentId   Int
+  department     Department      @relation(fields: [departmentId], references: [id])
+  semester       Int
+  section        String
+  academicYear   String
+  students       StudentBatch[]
+  timetableSlots TimetableSlot[]
+
+  createdAt      TimestamptzString @default(now())
+  updatedAt      temporal.updatedAtString()
+}
+
+model StudentBatch {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  batchId   Int
+  batch     LabBatch @relation(fields: [batchId], references: [id])
+}
+
+model AuditLog {
+  id           Int               @id @default(autoincrement())
+  userId       Int
+  user         User              @relation(fields: [userId], references: [id])
+  action       String
+  entityType   String
+  entityId     Int?
+  departmentId Int?
+  details      String?
+  ipAddress    String?
+
+  createdAt    TimestamptzString @default(now())
+}
+
+

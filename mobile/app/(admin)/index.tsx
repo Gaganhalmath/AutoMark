@@ -133,7 +133,7 @@ export default function AdminDashboardScreen() {
         <View style={styles.appBarLeft}>
           <SmartAttendLogo size={32} />
           <View>
-            <Text style={styles.appBarBrand}>SmartAttend</Text>
+            <Text style={styles.appBarBrand}>AutoMark</Text>
             <Text style={styles.appBarTitle}>Admin Dashboard</Text>
           </View>
         </View>
@@ -156,7 +156,7 @@ export default function AdminDashboardScreen() {
         <View style={styles.greetRow}>
           <View>
             <Text style={styles.greetName}>Hello, Admin 👋</Text>
-            <Text style={styles.greetSub}>SmartAttend Institute • Super Admin</Text>
+            <Text style={styles.greetSub}>AutoMark Institute • Super Admin</Text>
           </View>
           <View style={styles.notifWrap}>
             <Pressable style={styles.greetNotifBtn} hitSlop={8} onPress={() => router.push('/(admin)/audit-logs')}>

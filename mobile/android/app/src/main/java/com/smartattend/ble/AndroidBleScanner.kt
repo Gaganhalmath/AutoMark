@@ -172,12 +172,17 @@ class AndroidBleScanner(
         object : ScanCallback() {
 
             override fun onScanResult(
-                callbackType: Int,
-                result: ScanResult
-            ) {
+    callbackType: Int,
+    result: ScanResult
+) {
 
-                processScanResult(result)
-            }
+    println(
+        "SmartAttend BLE: BLE device discovered " +
+        "RSSI=${result.rssi}"
+    )
+
+    processScanResult(result)
+}
 
             override fun onScanFailed(
                 errorCode: Int

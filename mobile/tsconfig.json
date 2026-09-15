@@ -14,5 +14,5 @@
     ".expo/types/**/*.d.ts",
     "expo-env.d.ts",
     ".expo/types/**/*.ts"
-  ]
+, "app/(student)/device-registration.backup"  ]
 }

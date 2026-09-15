@@ -30,7 +30,7 @@ export default function NotificationsScreen() {
         <View style={styles.headerLeft}>
           <SmartAttendLogo size={32} />
           <View>
-            <Text style={styles.headerBrand}>SmartAttend</Text>
+            <Text style={styles.headerBrand}>AutoMark</Text>
             <Text style={styles.headerTitle}>Notifications</Text>
           </View>
         </View>

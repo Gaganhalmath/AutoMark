@@ -85,11 +85,22 @@ export const createAttendanceSession = async (req, res) => {
     // ...
     // Saturday = 6
 
-    const todayDay = now.getDay();
+    const todayDay = now.getDay() === 0 ? 7 : now.getDay();
+
+    console.log(
+      "🔥 TEST CLASS 24:",
+      timetables.filter((item) => item.classId === classId),
+    );
 
     const todayTimetable = timetables.find(
       (item) => item.classId === Number(classId) && item.dayOfWeek === todayDay,
     );
+    console.log(
+      "🔥 STUDENT CLASS 24 TIMETABLES:",
+      timetables.filter((item) => item.classId === Number(classId)),
+    );
+
+    console.log("🔥 STUDENT MATCHED TIMETABLE:", todayTimetable);
 
     if (!todayTimetable) {
       return res.status(400).json({
@@ -127,16 +138,16 @@ export const createAttendanceSession = async (req, res) => {
       });
     }
 
-    // --------------------------------------------------
-    // 6. Too late
-    // --------------------------------------------------
+    // // --------------------------------------------------
+    // // 6. Too late
+    // // --------------------------------------------------
 
-    if (now >= scheduleEnd) {
-      return res.status(400).json({
-        success: false,
-        message: `Attendance session for this class ended at ${todayTimetable.endTime}`,
-      });
-    }
+    // if (now >= scheduleEnd) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: `Attendance session for this class ended at ${todayTimetable.endTime}`,
+    //   });
+    // }
 
     // --------------------------------------------------
     // 7. Check whether a session already exists
@@ -149,8 +160,7 @@ export const createAttendanceSession = async (req, res) => {
         session.classId === Number(classId) &&
         !session.endedAt &&
         session.startedAt &&
-        new Date(session.startedAt) >= scheduleStart &&
-        new Date(session.startedAt) < scheduleEnd,
+        new Date(session.startedAt) >= scheduleStart,
     );
 
     if (activeSession) {
@@ -1229,8 +1239,17 @@ export const verifyStudentBleAttendance = async (req, res) => {
   }
 };
 export const getStudentActiveSession = async (req, res) => {
+  console.log(
+    "GET STUDENT ACTIVE SESSION HIT:",
+    req.originalUrl,
+    "classId:",
+    req.params.classId,
+  );
+
   try {
     const classId = Number(req.params.classId);
+
+    console.log("CHECKING CLASS ID:", classId);
 
     if (!Number.isInteger(classId)) {
       return res.status(400).json({
@@ -1247,11 +1266,23 @@ export const getStudentActiveSession = async (req, res) => {
 
     const timetables = await db.orm.public.Timetable.all();
 
-    const todayDay = now.getDay();
+    const todayDay = now.getDay() === 0 ? 7 : now.getDay();
 
     const timetable = timetables.find(
-      (item) => item.classId === classId && item.dayOfWeek === todayDay,
+      (item) =>
+        Number(item.classId) === classId && Number(item.dayOfWeek) === todayDay,
     );
+
+    console.log("TODAY DAY:", todayDay);
+    console.log("MATCHED TIMETABLE:", timetable);
+
+    // Debug all timetable entries for this class
+    console.log(
+      "🔥 STUDENT CLASS TIMETABLES:",
+      timetables.filter((item) => Number(item.classId) === classId),
+    );
+
+    console.log("🔥 STUDENT MATCHED TIMETABLE:", timetable);
 
     if (!timetable) {
       return res.status(200).json({
@@ -1279,10 +1310,10 @@ export const getStudentActiveSession = async (req, res) => {
     scheduleEnd.setHours(endHour, endMinute, 0, 0);
 
     // --------------------------------------------------
-    // 3. Outside class time = inactive
+    // 3. Attendance cannot start before scheduled start
     // --------------------------------------------------
 
-    if (now < scheduleStart || now >= scheduleEnd) {
+    if (now < scheduleStart) {
       return res.status(200).json({
         success: true,
         data: {
@@ -1299,11 +1330,10 @@ export const getStudentActiveSession = async (req, res) => {
 
     const activeSession = sessions.find(
       (session) =>
-        session.classId === classId &&
+        Number(session.classId) === classId &&
         session.startedAt &&
         !session.endedAt &&
-        new Date(session.startedAt) >= scheduleStart &&
-        new Date(session.startedAt) < scheduleEnd,
+        new Date(session.startedAt) >= scheduleStart,
     );
 
     // --------------------------------------------------
@@ -1320,7 +1350,30 @@ export const getStudentActiveSession = async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 6. Active session found
+    // 6. Get real class information
+    // --------------------------------------------------
+
+    const classes = await db.orm.public.Class.all();
+    const subjects = await db.orm.public.Subject.all();
+    const faculty = await db.orm.public.Faculty.all();
+    const users = await db.orm.public.User.all();
+
+    const classItem = classes.find((item) => Number(item.id) === classId);
+
+    const subject = subjects.find(
+      (item) => Number(item.id) === Number(classItem?.subjectId),
+    );
+
+    const facultyItem = faculty.find(
+      (item) => Number(item.id) === Number(classItem?.facultyId),
+    );
+
+    const facultyUser = users.find(
+      (item) => Number(item.id) === Number(facultyItem?.userId),
+    );
+
+    // --------------------------------------------------
+    // 7. Return active session + real class information
     // --------------------------------------------------
 
     return res.status(200).json({
@@ -1336,6 +1389,26 @@ export const getStudentActiveSession = async (req, res) => {
         scheduledStart: scheduleStart,
 
         scheduledEnd: scheduleEnd,
+
+        class: {
+          id: classItem?.id ?? classId,
+
+          subject: {
+            id: subject?.id ?? null,
+            code: subject?.code ?? null,
+            name: subject?.name ?? null,
+          },
+
+          room: timetable.room ?? null,
+
+          faculty: facultyUser?.name ?? null,
+        },
+
+        timetable: {
+          id: timetable.id,
+          startTime: timetable.startTime,
+          endTime: timetable.endTime,
+        },
       },
     });
   } catch (error) {

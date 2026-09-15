@@ -3,17 +3,25 @@
  * Connected to real backend attendance data
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useRouter,
+} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -23,7 +31,7 @@ import { Typography } from '../../constants/typography';
 import { Radius, Shadow, Spacing } from '../../constants/spacing';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'http://192.168.6.213:5000/api';
+const API_BASE_URL = 'http://192.168.212.213:5000/api';
 
 const RADIUS = 66;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -54,9 +62,11 @@ export default function AttendanceScreen() {
   >([]);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const [refreshing, setRefreshing] = useState(false);
+const [error, setError] = useState<string | null>(null);
 
-  const fetchAttendance = useCallback(async () => {
+  const fetchAttendance = useCallback(
+  async (isPullToRefresh = false) => {
     if (!tokens?.accessToken) {
       setError('Authentication token is missing.');
       setLoading(false);
@@ -64,7 +74,12 @@ export default function AttendanceScreen() {
     }
 
     try {
-      setLoading(true);
+      if (isPullToRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       setError(null);
 
       const response = await fetch(
@@ -111,12 +126,21 @@ export default function AttendanceScreen() {
       );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [tokens?.accessToken]);
+  },
+  [tokens?.accessToken],
+);
 
   useEffect(() => {
-    fetchAttendance();
-  }, [fetchAttendance]);
+  fetchAttendance();
+}, [fetchAttendance]);
+
+useFocusEffect(
+  useCallback(() => {
+    fetchAttendance(true);
+  }, [fetchAttendance]),
+);
 
   /*
    * Calculate overall attendance from real backend data.
@@ -173,7 +197,7 @@ export default function AttendanceScreen() {
 
           <View>
             <Text style={styles.headerBrand}>
-              SmartAttend
+              AutoMark
             </Text>
 
             <Text style={styles.headerTitle}>
@@ -209,12 +233,18 @@ export default function AttendanceScreen() {
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={
-          styles.scrollContent
-        }
-        showsVerticalScrollIndicator={false}
-      >
+  style={styles.scroll}
+  contentContainerStyle={
+    styles.scrollContent
+  }
+  showsVerticalScrollIndicator={false}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => fetchAttendance(true)}
+    />
+  }
+>
         {/* Page header */}
         <View style={styles.pageHeader}>
           <Pressable
@@ -268,7 +298,7 @@ export default function AttendanceScreen() {
 
             <Pressable
               style={styles.retryBtn}
-              onPress={fetchAttendance}
+              onPress={() => fetchAttendance()}
             >
               <Text style={styles.retryText}>
                 Retry
@@ -458,27 +488,37 @@ export default function AttendanceScreen() {
                   </Text>
                 </View>
               ) : (
-                subjects.map((sub) => {
-                  const percentage =
-                    Number(sub.percentage) || 0;
+                // subjects.map((sub) => {
+                //   const percentage =
+                //     Number(sub.percentage) || 0;
 
-                  const color =
-                    getStatusColor(
-                      percentage,
-                    );
+                //   const color =
+                //     getStatusColor(
+                //       percentage,
+                //     );
 
-                  const warning =
-                    percentage < 75;
+                //   const warning =
+                //     percentage < 75;
 
-                  return (
-                    <Pressable
-                      key={
-                        sub.subjectId ??
-                        `${sub.code}-${sub.subject}`
-                      }
-                      style={
-                        styles.subjectCard
-                      }
+                //   return (
+                //     <Pressable
+                //       key={
+                //         sub.subjectId ??
+                //         `${sub.code}-${sub.subject}`
+                //       }
+                //       style={
+                //         styles.subjectCard
+                //       }
+                subjects.map((sub, index) => {
+  console.log('ATTENDANCE SUBJECT:', index, sub);
+
+  const percentage = Number(sub.percentage) || 0;
+  const color = getStatusColor(percentage);
+  const warning = percentage < 75;
+
+  return (
+    <Pressable
+    key={`${sub.subjectId ?? sub.code ?? sub.subject}-${index}`}
                       onPress={() => {
                         if (
                           sub.subjectId ===

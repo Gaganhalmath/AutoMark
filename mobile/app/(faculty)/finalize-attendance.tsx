@@ -1,9 +1,12 @@
 /**
  * SmartAttend — Finalize Attendance Screen
+ * Real backend implementation
  */
-import React, { useEffect, useState } from 'react';
+
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -13,13 +16,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'http://192.168.6.213:5000/api';
+const API_BASE_URL = 'http://192.168.212.213:5000/api';
 
 type Participant = {
   studentId: number;
-  registerNumber: string;
-  name: string;
-  email: string;
+  registerNumber: string | null;
+  name: string | null;
+  email: string | null;
   status: 'PRESENT' | 'ABSENT' | 'LATE';
   source: string | null;
   attendanceId: number | null;
@@ -34,52 +37,150 @@ export default function FinalizeAttendanceScreen() {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalized, setFinalized] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const fetchFinalAttendance = async () => {
-      if (!sessionId || !tokens?.accessToken) {
-        setError('Session information is missing.');
-        setLoading(false);
-        return;
-      }
+  const fetchParticipants = useCallback(async () => {
+    if (!sessionId || !tokens?.accessToken) {
+      setError('Session information is missing.');
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/attendance/sessions/${sessionId}/participants`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${tokens.accessToken}`,
-            },
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await fetch(
+        `${API_BASE_URL}/attendance/sessions/${sessionId}/participants`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens.accessToken}`,
           },
+        },
+      );
+
+      const result = await response.json();
+
+      console.log('FINAL ATTENDANCE STATUS:', response.status);
+      console.log('FINAL ATTENDANCE RESPONSE:', result);
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || 'Failed to load final attendance',
         );
-
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || 'Failed to load final attendance',
-          );
-        }
-
-        setParticipants(result.data.participants || []);
-      } catch (err) {
-        console.error('FINAL ATTENDANCE ERROR:', err);
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to load final attendance',
-        );
-      } finally {
-        setLoading(false);
       }
-    };
 
-    fetchFinalAttendance();
+      setParticipants(result.data?.participants || []);
+    } catch (err) {
+      console.error('FINAL ATTENDANCE ERROR:', err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load final attendance',
+      );
+    } finally {
+      setLoading(false);
+    }
   }, [sessionId, tokens?.accessToken]);
+
+  useEffect(() => {
+    fetchParticipants();
+  }, [fetchParticipants]);
+
+  const handleFinalize = async () => {
+    if (!sessionId || !tokens?.accessToken) {
+      Alert.alert(
+        'Error',
+        'Session information is missing.',
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Finalize Attendance',
+      'Are you sure you want to finalize this attendance session? Once finalized, attendance cannot be modified.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Finalize',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setFinalizing(true);
+              setError('');
+
+              const response = await fetch(
+                `${API_BASE_URL}/attendance/sessions/${sessionId}/finalize`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${tokens.accessToken}`,
+                  },
+                },
+              );
+
+              const result = await response.json();
+
+              console.log(
+                'FINALIZE ATTENDANCE STATUS:',
+                response.status,
+              );
+              console.log(
+                'FINALIZE ATTENDANCE RESPONSE:',
+                result,
+              );
+
+              if (!response.ok || !result.success) {
+                throw new Error(
+                  result.message ||
+                    'Failed to finalize attendance session',
+                );
+              }
+
+              /*
+               * The backend creates ABSENT records for all
+               * enrolled students who were not marked.
+               *
+               * Fetch participants again so the final counts
+               * represent the finalized session.
+               */
+              await fetchParticipants();
+
+              setFinalized(true);
+
+              Alert.alert(
+                'Attendance Finalized',
+                'The attendance session has been successfully finalized.',
+              );
+            } catch (err) {
+              console.error(
+                'FINALIZE ATTENDANCE ERROR:',
+                err,
+              );
+
+              Alert.alert(
+                'Finalization Failed',
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to finalize attendance',
+              );
+            } finally {
+              setFinalizing(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const presentCount = participants.filter(
     (student) => student.status === 'PRESENT',
@@ -98,7 +199,11 @@ export default function FinalizeAttendanceScreen() {
   if (loading) {
     return (
       <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator
+          size="large"
+          color={Colors.primary}
+        />
+
         <Text style={styles.loadingText}>
           Loading final attendance...
         </Text>
@@ -109,7 +214,9 @@ export default function FinalizeAttendanceScreen() {
   if (error) {
     return (
       <View style={styles.loadingScreen}>
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.errorText}>
+          {error}
+        </Text>
 
         <Pressable
           style={styles.homeBtn}
@@ -126,36 +233,59 @@ export default function FinalizeAttendanceScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <View style={styles.checkCircle}>
-          <Text style={styles.icon}>🔒</Text>
+        <View
+          style={[
+            styles.checkCircle,
+            finalized && styles.finalizedCircle,
+          ]}
+        >
+          <Text style={styles.icon}>
+            {finalized ? '🔒' : '⚠️'}
+          </Text>
         </View>
 
         <Text style={styles.title}>
-          Ledger Locked & Finalized
+          {finalized
+            ? 'Ledger Locked & Finalized'
+            : 'Finalize Attendance'}
         </Text>
 
         <Text style={styles.subtitle}>
-          The attendance session has been permanently recorded
-          and finalized successfully.
+          {finalized
+            ? 'The attendance session has been permanently recorded and finalized successfully.'
+            : 'Review the attendance summary below. Finalizing will mark all unrecorded students as absent and lock the session.'}
         </Text>
 
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Session ID</Text>
-            <Text style={styles.val}>#{sessionId}</Text>
+            <Text style={styles.label}>
+              Session ID
+            </Text>
+
+            <Text style={styles.val}>
+              #{sessionId}
+            </Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Total Students</Text>
-            <Text style={styles.val}>{totalCount}</Text>
+            <Text style={styles.label}>
+              Total Students
+            </Text>
+
+            <Text style={styles.val}>
+              {totalCount}
+            </Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Present Count</Text>
+            <Text style={styles.label}>
+              Present Count
+            </Text>
+
             <Text
               style={[
                 styles.val,
@@ -169,7 +299,10 @@ export default function FinalizeAttendanceScreen() {
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Absent Count</Text>
+            <Text style={styles.label}>
+              Absent Count
+            </Text>
+
             <Text
               style={[
                 styles.val,
@@ -183,7 +316,10 @@ export default function FinalizeAttendanceScreen() {
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Late Count</Text>
+            <Text style={styles.label}>
+              Late Count
+            </Text>
+
             <Text
               style={[
                 styles.val,
@@ -196,14 +332,42 @@ export default function FinalizeAttendanceScreen() {
         </View>
       </View>
 
-      <Pressable
-        style={styles.homeBtn}
-        onPress={() => router.replace('/(faculty)')}
-      >
-        <Text style={styles.homeBtnText}>
-          Return to Faculty Dashboard
-        </Text>
-      </Pressable>
+      {!finalized ? (
+        <Pressable
+          style={[
+            styles.finalizeBtn,
+            finalizing && styles.disabledBtn,
+          ]}
+          disabled={finalizing}
+          onPress={handleFinalize}
+        >
+          {finalizing ? (
+            <View style={styles.buttonContent}>
+              <ActivityIndicator
+                size="small"
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.finalizeBtnText}>
+                Finalizing...
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.finalizeBtnText}>
+              Finalize Attendance
+            </Text>
+          )}
+        </Pressable>
+      ) : (
+        <Pressable
+          style={styles.homeBtn}
+          onPress={() => router.replace('/(faculty)')}
+        >
+          <Text style={styles.homeBtnText}>
+            Return to Faculty Dashboard
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -226,10 +390,14 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#FEF3C7',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
+  },
+
+  finalizedCircle: {
+    backgroundColor: '#DCFCE7',
   },
 
   icon: {
@@ -282,6 +450,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
 
+  finalizeBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+
+  finalizeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
   homeBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 14,
@@ -294,6 +482,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+
+  disabledBtn: {
+    opacity: 0.6,
   },
 
   loadingScreen: {

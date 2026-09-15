@@ -69,10 +69,11 @@ export const createFaculty = async (req, res) => {
 
     // Create User
     const user = await db.orm.public.User.create({
-      name,
-      email,
+      name: String(name).trim(),
+      email: String(email).trim().toLowerCase(),
       passwordHash,
       role: "FACULTY",
+      departmentId: Number(departmentId),
       isActive: true,
     });
 

@@ -1,6 +1,10 @@
 /**
  * SmartAttend — Faculty History Screen
+ *
+ * Uses the real backend response from:
+ * GET /api/faculty/attendance/history
  */
+
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,28 +16,38 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'http://192.168.6.213:5000/api';
+const API_BASE_URL = 'http://192.168.212.213:5000/api';
 
 type Session = {
-  id: number;
+  sessionId: number;
   sessionDate?: string;
   startedAt?: string;
   endedAt?: string | null;
+  status?: string;
+
+  class?: {
+    id: number;
+    semester?: number;
+    section?: string;
+    academicYear?: string;
+  } | null;
+
   subject?: {
     id: number;
     code: string;
     name: string;
-  } | string;
-  subjectCode?: string;
-  section?: string;
-  room?: string;
-  present?: number;
-  absent?: number;
-  late?: number;
-  total?: number;
+  } | null;
+
+  attendance?: {
+    totalStudents: number;
+    present: number;
+    absent: number;
+    late: number;
+  } | null;
 };
 
 export default function FacultyHistoryScreen() {
@@ -72,18 +86,33 @@ export default function FacultyHistoryScreen() {
 
       const result = await response.json();
 
-      console.log('FACULTY HISTORY STATUS:', response.status);
-      console.log('FACULTY HISTORY RESPONSE:', result);
+      console.log(
+        'FACULTY HISTORY STATUS:',
+        response.status,
+      );
+
+      console.log(
+        'FACULTY HISTORY RESPONSE:',
+        JSON.stringify(result, null, 2),
+      );
 
       if (!response.ok || !result.success) {
         throw new Error(
-          result.message || 'Failed to load attendance history',
+          result.message ||
+            'Failed to load attendance history',
         );
       }
 
-      setSessions(result.data?.sessions || result.data || []);
+      const historyData = Array.isArray(result.data)
+        ? result.data
+        : result.data?.sessions || [];
+
+      setSessions(historyData);
     } catch (err) {
-      console.error('FACULTY HISTORY ERROR:', err);
+      console.error(
+        'FACULTY HISTORY ERROR:',
+        err,
+      );
 
       setError(
         err instanceof Error
@@ -99,20 +128,30 @@ export default function FacultyHistoryScreen() {
     fetchHistory();
   }, [tokens?.accessToken]);
 
-  const filteredSessions = sessions.filter((session) => {
-    if (filter === 'completed') {
-      return !!session.endedAt;
-    }
+  /**
+   * Filter sessions
+   */
+  const filteredSessions = sessions.filter(
+    (session) => {
+      if (filter === 'completed') {
+        return !!session.endedAt;
+      }
 
-    if (filter === 'expired') {
-      return !session.endedAt;
-    }
+      if (filter === 'expired') {
+        return !session.endedAt;
+      }
 
-    return true;
-  });
+      return true;
+    },
+  );
 
+  /**
+   * Format date
+   */
   const formatDate = (date?: string) => {
-    if (!date) return 'Unknown date';
+    if (!date) {
+      return 'Unknown date';
+    }
 
     const parsedDate = new Date(date);
 
@@ -123,8 +162,13 @@ export default function FacultyHistoryScreen() {
     return parsedDate.toLocaleDateString();
   };
 
+  /**
+   * Format time
+   */
   const formatTime = (date?: string) => {
-    if (!date) return '';
+    if (!date) {
+      return '';
+    }
 
     const parsedDate = new Date(date);
 
@@ -139,26 +183,32 @@ export default function FacultyHistoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={['top']}
+    >
+      {/* Header */}
       <View style={styles.appBar}>
         <Text style={styles.appBarTitle}>
           Faculty Session History
         </Text>
       </View>
 
-      {/* Filter Tabs */}
+      {/* Filters */}
       <View style={styles.filterBar}>
         <Pressable
           style={[
             styles.chip,
-            filter === 'all' && styles.chipActive,
+            filter === 'all' &&
+              styles.chipActive,
           ]}
           onPress={() => setFilter('all')}
         >
           <Text
             style={[
               styles.chipText,
-              filter === 'all' && styles.chipTextActive,
+              filter === 'all' &&
+                styles.chipTextActive,
             ]}
           >
             All Sessions
@@ -168,14 +218,18 @@ export default function FacultyHistoryScreen() {
         <Pressable
           style={[
             styles.chip,
-            filter === 'completed' && styles.chipActive,
+            filter === 'completed' &&
+              styles.chipActive,
           ]}
-          onPress={() => setFilter('completed')}
+          onPress={() =>
+            setFilter('completed')
+          }
         >
           <Text
             style={[
               styles.chipText,
-              filter === 'completed' && styles.chipTextActive,
+              filter === 'completed' &&
+                styles.chipTextActive,
             ]}
           >
             Finalized
@@ -185,14 +239,18 @@ export default function FacultyHistoryScreen() {
         <Pressable
           style={[
             styles.chip,
-            filter === 'expired' && styles.chipActive,
+            filter === 'expired' &&
+              styles.chipActive,
           ]}
-          onPress={() => setFilter('expired')}
+          onPress={() =>
+            setFilter('expired')
+          }
         >
           <Text
             style={[
               styles.chipText,
-              filter === 'expired' && styles.chipTextActive,
+              filter === 'expired' &&
+                styles.chipTextActive,
             ]}
           >
             Expired / Manual
@@ -200,55 +258,125 @@ export default function FacultyHistoryScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      {/* History */}
+      <ScrollView
+        contentContainerStyle={
+          styles.scrollContent
+        }
+      >
         {loading ? (
-          <View style={styles.centerContainer}>
+          <View
+            style={styles.centerContainer}
+          >
             <ActivityIndicator
               size="large"
               color={Colors.primary}
             />
-            <Text style={styles.loadingText}>
+
+            <Text
+              style={styles.loadingText}
+            >
               Loading attendance history...
             </Text>
           </View>
         ) : error ? (
-          <View style={styles.centerContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View
+            style={styles.centerContainer}
+          >
+            <Text style={styles.errorText}>
+              {error}
+            </Text>
 
             <Pressable
               style={styles.retryBtn}
               onPress={fetchHistory}
             >
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={styles.retryText}>
+                Retry
+              </Text>
             </Pressable>
           </View>
         ) : filteredSessions.length === 0 ? (
-          <View style={styles.centerContainer}>
+          <View
+            style={styles.centerContainer}
+          >
             <Text style={styles.emptyText}>
               No attendance sessions found.
             </Text>
           </View>
         ) : (
           filteredSessions.map((session) => {
-            const total = session.total ?? 0;
-            const present = session.present ?? 0;
+            /**
+             * IMPORTANT:
+             *
+             * Backend returns:
+             *
+             * attendance: {
+             *   totalStudents,
+             *   present,
+             *   absent,
+             *   late
+             * }
+             *
+             * Therefore we read the values
+             * from session.attendance.
+             */
+
+            const total =
+              session.attendance
+                ?.totalStudents ?? 0;
+
+            const present =
+              session.attendance
+                ?.present ?? 0;
+
+            const absent =
+              session.attendance
+                ?.absent ?? 0;
+
+            const late =
+              session.attendance
+                ?.late ?? 0;
+
+            const isFinalized =
+              !!session.endedAt;
+
+            const subjectName =
+              session.subject?.name ||
+              'Attendance Session';
+
+            const subjectCode =
+              session.subject?.code || '';
+
+            const section =
+              session.class?.section ||
+              'Section not available';
 
             return (
               <Pressable
-                key={session.id}
+                key={session.sessionId}
                 style={styles.card}
                 onPress={() =>
-  router.push({
-    pathname: '/(faculty)/attendance-review',
-    params: { sessionId: String(session.id) },
-  })
-}
+                  router.push({
+                    pathname:
+                      '/(faculty)/attendance-review',
+                    params: {
+                      sessionId:
+                        String(
+                          session.sessionId,
+                        ),
+                    },
+                  })
+                }
               >
-                <View style={styles.cardTop}>
+                {/* Top Row */}
+                <View
+                  style={styles.cardTop}
+                >
                   <View
                     style={[
                       styles.badge,
-                      session.endedAt
+                      isFinalized
                         ? styles.completedBadge
                         : styles.pendingBadge,
                     ]}
@@ -256,47 +384,77 @@ export default function FacultyHistoryScreen() {
                     <Text
                       style={[
                         styles.badgeText,
-                        session.endedAt
+                        isFinalized
                           ? styles.completedText
                           : styles.pendingText,
                       ]}
                     >
-                      {session.endedAt
+                      {isFinalized
                         ? 'FINALIZED'
                         : 'ACTIVE'}
                     </Text>
                   </View>
 
-                  <Text style={styles.dateText}>
-                    {formatDate(session.sessionDate)}{' '}
-                    • {formatTime(session.startedAt)}
+                  <Text
+                    style={styles.dateText}
+                  >
+                    {formatDate(
+                      session.sessionDate,
+                    )}{' '}
+                    •{' '}
+                    {formatTime(
+                      session.startedAt,
+                    )}
                   </Text>
                 </View>
 
-                <Text style={styles.subjectTitle}>
-  {typeof session.subject === 'object'
-    ? session.subject.name
-    : session.subject || 'Attendance Session'}
-</Text>
+                {/* Subject */}
+                <Text
+                  style={styles.subjectTitle}
+                >
+                  {subjectName}
+                </Text>
 
-                <Text style={styles.metaSub}>
-  {typeof session.subject === 'object'
-    ? `${session.subject.code} • `
-    : session.subjectCode
-      ? `${session.subjectCode} • `
-      : ''}
-  {session.section || 'Section not available'}
-  {session.room
-    ? ` • ${session.room}`
-    : ''}
-</Text>
+                {/* Subject metadata */}
+                <Text
+                  style={styles.metaSub}
+                >
+                  {subjectCode
+                    ? `${subjectCode} • `
+                    : ''}
+                  {section}
+                </Text>
 
-                <View style={styles.footerRow}>
-                  <Text style={styles.presentText}>
+                {/* Attendance counts */}
+                <View
+                  style={styles.attendanceRow}
+                >
+                  <Text
+                    style={styles.presentText}
+                  >
                     Present: {present} / {total}
                   </Text>
 
-                  <Text style={styles.viewDetail}>
+                  <Text
+                    style={styles.absentText}
+                  >
+                    Absent: {absent}
+                  </Text>
+
+                  <Text
+                    style={styles.lateText}
+                  >
+                    Late: {late}
+                  </Text>
+                </View>
+
+                {/* Details */}
+                <View
+                  style={styles.footerRow}
+                >
+                  <Text
+                    style={styles.viewDetail}
+                  >
                     View Details →
                   </Text>
                 </View>
@@ -312,7 +470,8 @@ export default function FacultyHistoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor:
+      Colors.background,
   },
 
   appBar: {
@@ -375,7 +534,8 @@ const styles = StyleSheet.create({
 
   cardTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     alignItems: 'center',
   },
 
@@ -422,18 +582,38 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 
-  footerRow: {
+  attendanceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 16,
     paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    paddingBottom: 4,
   },
 
   presentText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
+  },
+
+  absentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.error,
+  },
+
+  lateText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.warning,
+  },
+
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent:
+      'flex-end',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
 
   viewDetail: {

@@ -4,7 +4,8 @@
  * Provides bottom tab navigation for all student screens.
  */
 import { Redirect, Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../auth/AuthProvider';
@@ -13,7 +14,7 @@ import { Typography } from '../../constants/typography';
 
 export default function StudentLayout() {
   const { isAuthenticated, user, isLoading } = useAuth();
-
+  const insets = useSafeAreaInsets();
   if (isLoading) return null;
 
   // Guard: must be authenticated student
@@ -27,9 +28,16 @@ export default function StudentLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+  styles.tabBar,
+  {
+    height: 64 + insets.bottom,
+    paddingBottom: 8 + insets.bottom,
+  },
+],
         tabBarActiveTintColor: Colors.primaryContainer,
         tabBarInactiveTintColor: Colors.onSurfaceVariant,
         tabBarLabelStyle: styles.tabLabel,
@@ -122,7 +130,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     height: 64,
     paddingBottom: 8,
-    paddingTop: 6,
+    paddingTop: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,

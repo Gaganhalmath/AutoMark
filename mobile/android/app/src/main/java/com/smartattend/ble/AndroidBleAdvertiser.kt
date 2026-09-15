@@ -1,5 +1,7 @@
 package com.smartattend.ble
 
+import android.util.Log
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -15,6 +17,8 @@ import java.nio.charset.StandardCharsets
 class AndroidBleAdvertiser(
     private val context: Context
 ) {
+
+    private val TAG = "SmartAttendBLE"
 
     companion object {
 
@@ -63,61 +67,27 @@ class AndroidBleAdvertiser(
     private val advertiseCallback =
         object : AdvertiseCallback() {
 
-            override fun onStartSuccess(
-                settingsInEffect: AdvertiseSettings?
-            ) {
+            
+            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+    Log.d(TAG, "Advertising STARTED")
+    Log.d(TAG, "ID = $currentSessionId")
+}
 
-                println(
-                    "SmartAttend BLE: Advertising STARTED"
-                )
+override fun onStartFailure(errorCode: Int) {
+    val errorMessage = when (errorCode) {
+        ADVERTISE_FAILED_ALREADY_STARTED -> "ALREADY_STARTED"
+        ADVERTISE_FAILED_DATA_TOO_LARGE -> "DATA_TOO_LARGE"
+        ADVERTISE_FAILED_FEATURE_UNSUPPORTED -> "FEATURE_UNSUPPORTED"
+        ADVERTISE_FAILED_INTERNAL_ERROR -> "INTERNAL_ERROR"
+        ADVERTISE_FAILED_TOO_MANY_ADVERTISERS -> "TOO_MANY_ADVERTISERS"
+        else -> "UNKNOWN_ERROR"
+    }
 
-                println(
-                    "SmartAttend BLE: " +
-                            "ID = $currentSessionId"
-                )
-            }
+    Log.e(TAG, "Advertising FAILED")
+    Log.e(TAG, "Error code = $errorCode")
+    Log.e(TAG, "Error = $errorMessage")
+}
 
-            override fun onStartFailure(
-                errorCode: Int
-            ) {
-
-                val errorMessage =
-                    when (errorCode) {
-
-                        ADVERTISE_FAILED_ALREADY_STARTED ->
-                            "ALREADY_STARTED"
-
-                        ADVERTISE_FAILED_DATA_TOO_LARGE ->
-                            "DATA_TOO_LARGE"
-
-                        ADVERTISE_FAILED_FEATURE_UNSUPPORTED ->
-                            "FEATURE_UNSUPPORTED"
-
-                        ADVERTISE_FAILED_INTERNAL_ERROR ->
-                            "INTERNAL_ERROR"
-
-                        ADVERTISE_FAILED_TOO_MANY_ADVERTISERS ->
-                            "TOO_MANY_ADVERTISERS"
-
-                        else ->
-                            "UNKNOWN_ERROR"
-                    }
-
-                println(
-                    "SmartAttend BLE: " +
-                            "Advertising FAILED"
-                )
-
-                println(
-                    "SmartAttend BLE: " +
-                            "Error code = $errorCode"
-                )
-
-                println(
-                    "SmartAttend BLE: " +
-                            "Error = $errorMessage"
-                )
-            }
         }
 
     @SuppressLint("MissingPermission")
@@ -290,6 +260,8 @@ class AndroidBleAdvertiser(
                     "Payload bytes = ${idData.size}"
         )
 
+        Log.d(TAG, "startAdvertising() called with ID = $sessionId")
+        Log.d(TAG, "Calling BluetoothLeAdvertiser.startAdvertising()")
         bleAdvertiser.startAdvertising(
             settings,
             advertiseData,

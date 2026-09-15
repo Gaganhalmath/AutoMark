@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,7 +24,7 @@ import { Typography } from '../../constants/typography';
 import { Radius, Shadow, Spacing } from '../../constants/spacing';
 import { useAuth } from '../../auth/AuthProvider';
 
-const API_BASE_URL = 'http://192.168.6.213:5000/api';
+const API_BASE_URL = 'http://192.168.212.213:5000/api';
 
 type AttendanceRecord = {
   attendanceId: number;
@@ -81,9 +82,10 @@ export default function HistoryScreen() {
 
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+const [refreshing, setRefreshing] = useState(false);
+const [error, setError] = useState('');
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (isRefresh = false) => {
     if (!tokens?.accessToken) {
       setError('Authentication token is missing.');
       setLoading(false);
@@ -91,8 +93,13 @@ export default function HistoryScreen() {
     }
 
     try {
-      setLoading(true);
-      setError('');
+      if (isRefresh) {
+  setRefreshing(true);
+} else {
+  setLoading(true);
+}
+
+setError('');
 
       const response = await fetch(
         `${API_BASE_URL}/student/attendance/history`,
@@ -127,6 +134,7 @@ export default function HistoryScreen() {
       );
     } finally {
       setLoading(false);
+setRefreshing(false);
     }
   };
 
@@ -256,7 +264,7 @@ export default function HistoryScreen() {
 
           <View>
             <Text style={styles.headerBrand}>
-              SmartAttend
+              AutoMark
             </Text>
 
             <Text style={styles.headerTitle}>
@@ -290,10 +298,18 @@ export default function HistoryScreen() {
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+  style={styles.scroll}
+  contentContainerStyle={styles.scrollContent}
+  showsVerticalScrollIndicator={false}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => fetchHistory(true)}
+      colors={[Colors.primaryContainer]}
+      tintColor={Colors.primaryContainer}
+    />
+  }
+>
         {/* Top bar */}
         <View style={styles.topBar}>
           <Pressable

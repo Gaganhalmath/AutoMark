@@ -4,9 +4,25 @@ export const getClasses = async (req, res) => {
   try {
     const classes = await db.orm.public.Class.all();
 
+    let filteredClasses = classes;
+
+    // Department Admin / HOD can only see their department classes
+    if (req.user.role === "ADMIN" || req.user.role === "HOD") {
+      if (!req.user.departmentId) {
+        return res.status(403).json({
+          success: false,
+          message: "Department is not assigned to this account",
+        });
+      }
+
+      filteredClasses = classes.filter(
+        (item) => Number(item.departmentId) === Number(req.user.departmentId),
+      );
+    }
+
     res.status(200).json({
       success: true,
-      data: classes,
+      data: filteredClasses,
     });
   } catch (error) {
     console.error("Error fetching classes:", error);
@@ -43,10 +59,31 @@ export const createClass = async (req, res) => {
       });
     }
 
+    const selectedDepartmentId = Number(departmentId);
+
+    // Department Admin / HOD can only create classes in their department
+    if (req.user.role === "ADMIN" || req.user.role === "HOD") {
+      if (!req.user.departmentId) {
+        return res.status(403).json({
+          success: false,
+          message: "Department is not assigned to this account",
+        });
+      }
+
+      if (selectedDepartmentId !== Number(req.user.departmentId)) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only create classes in your department",
+        });
+      }
+    }
+
     // Check subject
     const subjects = await db.orm.public.Subject.all();
 
-    const subject = subjects.find((item) => item.id === Number(subjectId));
+    const subject = subjects.find(
+      (item) => Number(item.id) === Number(subjectId),
+    );
 
     if (!subject) {
       return res.status(404).json({
@@ -55,11 +92,19 @@ export const createClass = async (req, res) => {
       });
     }
 
+    // Subject must belong to the class department
+    if (Number(subject.departmentId) !== selectedDepartmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Subject does not belong to the selected department",
+      });
+    }
+
     // Check faculty
     const faculty = await db.orm.public.Faculty.all();
 
     const selectedFaculty = faculty.find(
-      (item) => item.id === Number(facultyId),
+      (item) => Number(item.id) === Number(facultyId),
     );
 
     if (!selectedFaculty) {
@@ -69,11 +114,16 @@ export const createClass = async (req, res) => {
       });
     }
 
+    /*
+     * Faculty can belong to any department.
+     * Cross-department faculty assignment is intentionally allowed.
+     */
+
     // Check department
     const departments = await db.orm.public.Department.all();
 
     const department = departments.find(
-      (item) => item.id === Number(departmentId),
+      (item) => Number(item.id) === selectedDepartmentId,
     );
 
     if (!department) {
@@ -87,11 +137,45 @@ export const createClass = async (req, res) => {
     const newClass = await db.orm.public.Class.create({
       subjectId: Number(subjectId),
       facultyId: Number(facultyId),
-      departmentId: Number(departmentId),
+      departmentId: selectedDepartmentId,
       semester: Number(semester),
-      section,
-      academicYear,
+      section: String(section).trim().toUpperCase(),
+      academicYear: String(academicYear).trim(),
     });
+
+    // Automatically enroll all existing students
+    // who belong to this department, semester, section,
+    // and academic year.
+    const matchingStudents = await db.orm.public.Student.where({
+      departmentId: selectedDepartmentId,
+      semester: Number(semester),
+      section: String(section).trim().toUpperCase(),
+      academicYear: String(academicYear).trim(),
+    }).all();
+
+    let enrolledCount = 0;
+
+    for (const student of matchingStudents) {
+      const existingEnrollment = await db.orm.public.Enrollment.where({
+        studentId: student.id,
+        classId: newClass.id,
+      }).all();
+
+      if (existingEnrollment.length > 0) {
+        continue;
+      }
+
+      await db.orm.public.Enrollment.create({
+        studentId: student.id,
+        classId: newClass.id,
+      });
+
+      enrolledCount++;
+    }
+
+    console.log(
+      `Class enrollment sync: class ${newClass.id} -> ${enrolledCount} student(s) enrolled`,
+    );
 
     res.status(201).json({
       success: true,
@@ -112,7 +196,6 @@ export const getFacultyClasses = async (req, res) => {
   try {
     const userId = Number(req.user.id);
 
-    // Find the faculty linked to the logged-in user
     const facultyList = await db.orm.public.Faculty.all();
 
     const faculty = facultyList.find((item) => item.userId === userId);
@@ -124,17 +207,13 @@ export const getFacultyClasses = async (req, res) => {
       });
     }
 
-    // Get classes handled by this faculty
     const classes = await db.orm.public.Class.all();
 
     const facultyClasses = classes.filter(
       (item) => item.facultyId === faculty.id,
     );
 
-    // Get subjects
     const subjects = await db.orm.public.Subject.all();
-
-    // Get departments
     const departments = await db.orm.public.Department.all();
 
     const result = facultyClasses.map((classItem) => {
@@ -193,7 +272,6 @@ export const getClassDetails = async (req, res) => {
       });
     }
 
-    // Find the logged-in faculty
     const facultyList = await db.orm.public.Faculty.all();
 
     const faculty = facultyList.find((item) => item.userId === userId);
@@ -205,7 +283,6 @@ export const getClassDetails = async (req, res) => {
       });
     }
 
-    // Find the class
     const classes = await db.orm.public.Class.all();
 
     const classItem = classes.find(
@@ -219,19 +296,16 @@ export const getClassDetails = async (req, res) => {
       });
     }
 
-    // Find subject
     const subjects = await db.orm.public.Subject.all();
 
     const subject = subjects.find((item) => item.id === classItem.subjectId);
 
-    // Find department
     const departments = await db.orm.public.Department.all();
 
     const department = departments.find(
       (item) => item.id === classItem.departmentId,
     );
 
-    // Find enrolled students
     const enrollments = await db.orm.public.Enrollment.all();
 
     const classEnrollments = enrollments.filter(

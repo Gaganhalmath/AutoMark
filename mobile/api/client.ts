@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://192.168.6.213:5000';
+const API_BASE_URL = 'http://192.168.212.213:5000';
 
 export interface BackendLoginResponse {
   success: boolean;
@@ -108,5 +108,5 @@ export async function getStudentProfile(accessToken: string) {
     );
   }
 
-  return result.data?.student;
+  return result.data;
 }

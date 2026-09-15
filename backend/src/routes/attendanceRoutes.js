@@ -49,6 +49,13 @@ router.post(
 );
 
 router.get(
+  "/student/active-session/:classId",
+  authenticate,
+  authorize("STUDENT"),
+  getStudentActiveSession,
+);
+
+router.get(
   "/sessions/:id",
   authenticate,
   authorize("FACULTY"),
@@ -67,13 +74,6 @@ router.post(
   authenticate,
   authorize("FACULTY"),
   finalizeAttendanceSession,
-);
-
-router.get(
-  "/student/active-session/:classId",
-  authenticate,
-  authorize("STUDENT"),
-  getStudentActiveSession,
 );
 
 export default router;

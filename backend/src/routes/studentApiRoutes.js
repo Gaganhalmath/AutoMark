@@ -8,6 +8,7 @@ import {
   getStudentTimetable,
   getStudentAttendance,
   getStudentAttendanceHistory,
+  getStudentAttendanceHistoryDetail,
 } from "../controllers/studentController.js";
 
 import { authenticate } from "../middleware/authMiddleware.js";
@@ -53,6 +54,13 @@ router.get(
   authenticate,
   authorize("STUDENT"),
   getStudentAttendanceHistory,
+);
+
+router.get(
+  "/attendance/history/:attendanceId",
+  authenticate,
+  authorize("STUDENT"),
+  getStudentAttendanceHistoryDetail,
 );
 
 export default router;

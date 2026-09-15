@@ -3,7 +3,16 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -14,14 +23,15 @@ import { useAuth } from '../../auth/AuthProvider';
 import { getStudentProfile } from '../../api/client';
 
 export default function StudentProfileScreen() {
+  const router = useRouter();
   const { logout, tokens } = useAuth();
 
   const [student, setStudent] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-  const loadProfile = async () => {
+  const loadProfile = async (isRefresh = false) => {
     if (!tokens?.accessToken) {
       setError('No authentication token found');
       setLoading(false);
@@ -29,6 +39,14 @@ export default function StudentProfileScreen() {
     }
 
     try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setError(null);
+
       const studentData = await getStudentProfile(
         tokens.accessToken
       );
@@ -39,7 +57,9 @@ export default function StudentProfileScreen() {
       );
 
       if (!studentData) {
-        throw new Error('Student data missing from profile response');
+        throw new Error(
+          'Student data missing from profile response'
+        );
       }
 
       setStudent(studentData);
@@ -48,58 +68,62 @@ export default function StudentProfileScreen() {
       setError(err?.message || 'Failed to load profile');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  loadProfile();
-}, [tokens?.accessToken]);
+  React.useEffect(() => {
+    loadProfile();
+  }, [tokens?.accessToken]);
 
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.message}>Loading profile...</Text>
+          <Text style={styles.message}>
+            Loading profile...
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-if (error) {
-  return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.center}>
-        <Ionicons
-          name="alert-circle-outline"
-          size={48}
-          color={Colors.error}
-        />
-
-        <Text style={styles.errorTitle}>
-          Unable to load profile
-        </Text>
-
-        <Text style={styles.errorMessage}>
-          {error}
-        </Text>
-
-        <Pressable
-          style={styles.logoutButton}
-          onPress={logout}
-        >
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
           <Ionicons
-            name="log-out-outline"
-            size={20}
+            name="alert-circle-outline"
+            size={48}
             color={Colors.error}
           />
 
-          <Text style={styles.logoutText}>
-            Sign Out (Testing)
+          <Text style={styles.errorTitle}>
+            Unable to load profile
           </Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
-  );
-}
+
+          <Text style={styles.errorMessage}>
+            {error}
+          </Text>
+
+          <Pressable
+            style={styles.logoutButton}
+            onPress={logout}
+          >
+            <Ionicons
+              name="log-out-outline"
+              size={20}
+              color={Colors.error}
+            />
+
+            <Text style={styles.logoutText}>
+              Sign Out (Testing)
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!student) {
     return (
@@ -119,7 +143,19 @@ if (error) {
         <Text style={styles.appBarTitle}>Profile</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadProfile(true)}
+            colors={[Colors.primaryContainer]}
+            tintColor={Colors.primaryContainer}
+          />
+        }
+      >
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
             <Ionicons
@@ -162,8 +198,25 @@ if (error) {
 
           <ProfileRow
             label="Device"
-            value="Not Registered"
+            value={
+              student.deviceRegistered
+                ? 'Registered'
+                : 'Not Registered'
+            }
           />
+
+          <TouchableOpacity
+            onPress={() =>
+              router.push(
+                '/(student)/device-registration'
+              )
+            }
+            style={styles.deviceButton}
+          >
+            <Text style={styles.deviceButtonText}>
+              Test Device Registration
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <Pressable
@@ -184,7 +237,7 @@ if (error) {
         <Text style={styles.noLogout}>
           🔒 Student hardware binding active on this device.
         </Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -271,7 +324,11 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing.marginMobile,
+  },
+
+  contentContainer: {
     paddingTop: Spacing['2xl'],
+    paddingBottom: Spacing['2xl'],
     gap: Spacing.xl,
   },
 
@@ -316,6 +373,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.lg,
+  },
+
+  deviceButton: {
+    marginTop: 20,
+    marginBottom: 14,
+  },
+
+  deviceButtonText: {
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
   },
 
   logoutButton: {
